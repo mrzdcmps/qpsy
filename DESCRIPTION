@@ -2,8 +2,8 @@ Package: qpsy
 Type: Package
 Title: Functions to use for online experiments with jsPsych on qpsy.de
 Version: 0.1.0
-Author: Moritz Dechamps (LMU)
-Maintainer: moritz.dechamps@psy.lmu.de
+Authors@R: person("Moritz", "Dechamps", email = "moritz.dechamps@psy.lmu.de",
+  role = c("aut", "cre"))
 Description: Use these functions for your data analysis with experiments stored on qpsy.de
 Encoding: UTF-8
 LazyData: true
@@ -11,4 +11,6 @@ RoxygenNote: 7.2.3
 Imports:
 	data.table (>= 1.9.4),
 	dplyr,
-	rvest
+	tidyr,
+	rvest,
+	jsonlite

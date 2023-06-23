@@ -4,10 +4,12 @@
 \alias{loadexp}
 \title{Load Experimental Files from Server}
 \usage{
-loadexp(expfolder)
+loadexp(exp, subdirs = TRUE)
 }
 \arguments{
-\item{expfolder}{The data folder of the experiment to be loaded}
+\item{exp}{String. The name of the data folder of the experiment to be loaded.}
+
+\item{subdirs}{Logical. Should subdirectories be considered?}
 }
 \value{
 Dataframe containing all trials of the combines result files
@@ -16,6 +18,5 @@ Dataframe containing all trials of the combines result files
 Read all results files (.csv) from the server and write to dataframe
 }
 \examples{
-temp1 <- C_to_F(22);
-temp2 <- C_to_F( c(-2, 12, 23) );
+myexp <- loadexp("myexp")
 }

@@ -12,7 +12,7 @@ loadexp(exp, subdirs = TRUE)
 \item{subdirs}{Logical. Should subdirectories be considered?}
 }
 \value{
-Dataframe containing all trials of the combines result files
+Dataframe containing all trials of the combined result files.
 }
 \description{
 Read all results files (.csv) from the server and write to dataframe

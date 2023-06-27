@@ -6,8 +6,8 @@
 #'
 #' Read all results files (.csv) from the server and write to dataframe
 #' @param exp String. The name of the data folder of the experiment to be loaded.
-#' @param subdirs Logical. Should subdirectories be considered? 
-#' @return Dataframe containing all trials of the combines result files
+#' @param subdirs Logical. Should subdirectories be considered?
+#' @return Dataframe containing all trials of the combined result files.
 #' @examples
 #' myexp <- loadexp("myexp")
 #' @export
@@ -21,25 +21,25 @@ loadexp <- function(exp, subdirs=TRUE){
 
   #find the hrefs attributes which contain ".csv"
   filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% rvest::html_text()
-  
+
   #look for subdirectories
   if(subdirs == TRUE){
     #list subdirectories
     folders <- rvest::html_elements(page, xpath = ".//a[contains(@href, '/')]") %>% rvest::html_text()
     #exclude "Parent directory"
     folders <- folders[-1]
-    
+
     if(length(folders > 0)){
       for (f in folders){
         tmp <- .rff(paste0(exp,"/",f))
         if(length(tmp)>0) tmp <- paste0(f,tmp)
         filenames <- append(filenames, tmp)
       }
-      
+
     }
   }
-  
-  
+
+
   links <- paste0(url, filenames)
   links <- gsub(" ", "%20", links)
 
@@ -88,7 +88,7 @@ loadexp <- function(exp, subdirs=TRUE){
 #' survey <- myexp %>%
 #'   filter(trial_part == "survey") %>%
 #'   splitresponse()
-#'   
+#'
 #' survey <- splitresponse(subset(myexp, trial_part == "survey"))
 #' @export
 

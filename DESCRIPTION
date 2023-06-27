@@ -1,7 +1,7 @@
 Package: qpsy
 Type: Package
 Title: Functions to use for online experiments with jsPsych on qpsy.de
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: person("Moritz", "Dechamps", email = "moritz.dechamps@psy.lmu.de",
   role = c("aut", "cre"))
 Description: Use these functions for your data analysis with experiments stored on qpsy.de
@@ -13,4 +13,5 @@ Imports:
 	dplyr,
 	tidyr,
 	rvest,
-	jsonlite
+	jsonlite,
+	pbapply

@@ -43,7 +43,7 @@ loadexp <- function(exp, subdirs=TRUE){
   links <- paste0(url, filenames)
   links <- gsub(" ", "%20", links)
 
-  raw <- lapply(links, data.table::fread)
+  raw <- pbapply::pblapply(links, data.table::fread, showProgress = FALSE)
   data.table::rbindlist(raw, id="file", fill=T) %>%
     dplyr::mutate(
       response=gsub("\"\"", "\"", response),

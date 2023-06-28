@@ -4,12 +4,14 @@
 \alias{loadexp}
 \title{Load Experimental Files from Server}
 \usage{
-loadexp(exp, subdirs = TRUE)
+loadexp(exp, subdirs = TRUE, splitresponse = TRUE)
 }
 \arguments{
 \item{exp}{String. The name of the data folder of the experiment to be loaded.}
 
 \item{subdirs}{Logical. Should subdirectories be considered?}
+
+\item{splitreponse}{Logical. Should survey responses be automatically written into separate columns?}
 }
 \value{
 Dataframe containing all trials of the combined result files.

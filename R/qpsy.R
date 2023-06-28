@@ -7,12 +7,13 @@
 #' Read all results files (.csv) from the server and write to dataframe
 #' @param exp String. The name of the data folder of the experiment to be loaded.
 #' @param subdirs Logical. Should subdirectories be considered?
+#' @param splitreponse Logical. Should survey responses be automatically written into separate columns?
 #' @return Dataframe containing all trials of the combined result files.
 #' @examples
 #' myexp <- loadexp("myexp")
 #' @export
 
-loadexp <- function(exp, subdirs=TRUE){
+loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 
   #read the page
   burl <- "https://qpsy.de/data/"
@@ -50,6 +51,11 @@ loadexp <- function(exp, subdirs=TRUE){
   if("response" %in% colnames(out)) out$response <- gsub("\"\"", "\"", out$response)
   if("responses" %in% colnames(out)) out$responses <- gsub("\"\"", "\"", out$responses)
   if("view_history" %in% colnames(out)) out$view_history <- gsub("\"\"", "\"", out$view_history)
+
+  if(splitresponse == TRUE){
+    out <- splitresponse(out)
+  }
+
   out
 }
 
@@ -95,13 +101,22 @@ loadexp <- function(exp, subdirs=TRUE){
 #' @export
 
 splitresponse <- function(data){
-  if(any(data$response == "") == TRUE) stop("Please select data with valid response variable.")
-  data %>%
+  if(!("response" %in% colnames(data))) stop("Dataframe does not contain a \"response\" column")
+
+  message("Splitting responses...")
+  data$line <- as.numeric(row.names(data))
+
+  r <- data %>%
+    dplyr::filter(response != "") %>% #only lines that contain responses
     dplyr::mutate(
       tmp = jsonlite::stream_in(textConnection(response), simplifyDataFrame = FALSE),
       tmp = lapply(tmp, dplyr::bind_cols)
     ) %>%
-      tidyr::unnest(tmp)
+    tidyr::unnest(tmp) %>%
+    select(line:last_col()) #select only new variables
+
+  left_join(data, r, by="line") %>%
+    select(-line)
 }
 
 

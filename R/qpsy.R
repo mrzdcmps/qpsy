@@ -116,7 +116,22 @@ splitresponse <- function(data){
     tidyr::unnest(tmp) %>%
     dplyr::select(line:last_col()) #select only new variables
 
-  dplyr::left_join(data, r, by="line") %>%
+  out <- dplyr::left_join(data, r, by="line")
+
+  # fill to other rows of file
+  if("file" %in% colnames(data)){
+    out <- out %>%
+      dplyr::group_by(file) %>%
+      tidyr::fill(line:last_col() & -line, .direction = "downup") %>%
+      dplyr::ungroup()
+  } else if("subject" %in% colnames(data)){
+    out <- out %>%
+      dplyr::group_by(subject) %>%
+      tidyr::fill(line:last_col() & -line, .direction = "downup") %>%
+      dplyr::ungroup()
+  }
+
+  out %>%
     dplyr::select(-c(line))
 }
 

@@ -117,7 +117,7 @@ splitresponse <- function(data){
     dplyr::select(line:last_col()) #select only new variables
 
   dplyr::left_join(data, r, by="line") %>%
-    dplyr::select(-c(line,response))
+    dplyr::select(-c(line))
 }
 
 

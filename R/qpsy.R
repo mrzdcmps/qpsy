@@ -108,16 +108,16 @@ splitresponse <- function(data){
   data$line <- as.numeric(row.names(data))
 
   r <- data %>%
-    dplyr::filter(response != "") %>% #only lines that contain responses
+    dplyr::filter(grepl("\\{\"",response)) %>% #only lines that contain JSON responses
     dplyr::mutate(
       tmp = jsonlite::stream_in(textConnection(response), simplifyDataFrame = FALSE),
       tmp = lapply(tmp, dplyr::bind_cols)
     ) %>%
     tidyr::unnest(tmp) %>%
-    select(line:last_col()) #select only new variables
+    dplyr::select(line:last_col()) #select only new variables
 
-  left_join(data, r, by="line") %>%
-    select(-line)
+  dplyr::left_join(data, r, by="line") %>%
+    dplyr::select(-c(line,response))
 }
 
 

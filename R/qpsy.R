@@ -44,11 +44,13 @@ loadexp <- function(exp, subdirs=TRUE){
   links <- gsub(" ", "%20", links)
 
   raw <- pbapply::pblapply(links, data.table::fread, showProgress = FALSE)
-  data.table::rbindlist(raw, id="file", fill=T) %>%
-    dplyr::mutate(
-      response=gsub("\"\"", "\"", response),
-      view_history=gsub("\"\"", "\"", view_history)
-      )
+  out <- data.table::rbindlist(raw, id="file", fill=T)
+
+  # fix double quotes on JSON input
+  if("response" %in% colnames(out)) out$response <- gsub("\"\"", "\"", out$response)
+  if("responses" %in% colnames(out)) out$responses <- gsub("\"\"", "\"", out$responses)
+  if("view_history" %in% colnames(out)) out$view_history <- gsub("\"\"", "\"", out$view_history)
+  out
 }
 
 

@@ -15,8 +15,25 @@
 
 loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 
+  # check if config containing user and password is already downloaded
+  key <- try(config::get("qpsy"), silent = T)
+  
+  # ask for password and download config if it is not loaded
+  if(inherits(key, "try-error")){
+    
+    user <- "serverdata"
+    pw <- rstudioapi::askForPassword("Please enter the password")
+    
+    download.file(paste0("https://",user,":",pw,"@qpsy.de/data/config.yml"), "config.yml")
+    key <- config::get("qpsy")
+  
+  }
+  
+  # Give error if config could not be downloaded
+  if(inherits(key, "try-error")) stop("Wrong credentials! Please try again.")
+  
   #read the page
-  burl <- "https://qpsy.de/data/"
+  burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
   url <- paste0(burl,exp,"/")
   page <- rvest::read_html(url)
 
@@ -64,7 +81,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 # Helper function: Read files recursively
 
 .rff <- function(exp){
-  burl <- "https://qpsy.de/data/"
+  burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
   url <- paste0(burl,exp,"/")
   page <- rvest::read_html(url)
 

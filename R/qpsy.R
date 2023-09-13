@@ -32,15 +32,15 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
   # Give error if config could not be downloaded
   if(inherits(key, "try-error")) stop("Wrong credentials! Please try again.")
   
-  #read the page
+  # read the page
   burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
   url <- paste0(burl,exp,"/")
   page <- rvest::read_html(url)
 
-  #find the hrefs attributes which contain ".csv"
+  # find the hrefs attributes which contain ".csv"
   filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% rvest::html_text()
-
-  #look for subdirectories
+  
+  # look for subdirectories
   if(subdirs == TRUE){
     #list subdirectories
     folders <- rvest::html_elements(page, xpath = ".//a[contains(@href, '/')]") %>% rvest::html_text()
@@ -57,10 +57,14 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
     }
   }
 
-
+  # empty folder?
+  if(length(filenames) == 0) stop("No files found in folder.")
+  
+  # create links
   links <- paste0(url, filenames)
   links <- gsub(" ", "%20", links)
 
+  # read and bind files
   raw <- pbapply::pblapply(links, data.table::fread, showProgress = FALSE)
   out <- data.table::rbindlist(raw, id="file", fill=T)
 
@@ -69,6 +73,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
   if("responses" %in% colnames(out)) out$responses <- gsub("\"\"", "\"", out$responses)
   if("view_history" %in% colnames(out)) out$view_history <- gsub("\"\"", "\"", out$view_history)
 
+  # split responses
   if(splitresponse == TRUE){
     out <- splitresponse(out)
   }

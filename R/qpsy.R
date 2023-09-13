@@ -81,6 +81,8 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 # Helper function: Read files recursively
 
 .rff <- function(exp){
+  key <- config::get("qpsy")
+  
   burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
   url <- paste0(burl,exp,"/")
   page <- rvest::read_html(url)

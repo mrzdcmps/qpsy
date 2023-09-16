@@ -17,21 +17,21 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 
   # check if config containing user and password is already downloaded
   key <- try(config::get("qpsy"), silent = T)
-  
+
   # ask for password and download config if it is not loaded
   if(inherits(key, "try-error")){
-    
+
     user <- "serverdata"
     pw <- rstudioapi::askForPassword("Please enter the password")
-    
+
     download.file(paste0("https://",user,":",pw,"@qpsy.de/data/config.yml"), "config.yml")
     key <- config::get("qpsy")
-  
+
   }
-  
+
   # Give error if config could not be downloaded
   if(inherits(key, "try-error")) stop("Wrong credentials! Please try again.")
-  
+
   # read the page
   burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
   url <- paste0(burl,exp,"/")
@@ -39,7 +39,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 
   # find the hrefs attributes which contain ".csv"
   filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% rvest::html_text()
-  
+
   # look for subdirectories
   if(subdirs == TRUE){
     #list subdirectories
@@ -59,7 +59,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 
   # empty folder?
   if(length(filenames) == 0) stop("No files found in folder.")
-  
+
   # create links
   links <- paste0(url, filenames)
   links <- gsub(" ", "%20", links)
@@ -87,7 +87,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 
 .rff <- function(exp){
   key <- config::get("qpsy")
-  
+
   burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
   url <- paste0(burl,exp,"/")
   page <- rvest::read_html(url)
@@ -102,7 +102,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 
   if(length(folders > 0)){
     for (f in folders){
-      tmp <- rff(paste0(exp,"/",f))
+      tmp <- .rff(paste0(exp,"/",f))
       if(length(tmp)>0) tmp <- paste0(f,tmp)
       filenames <- append(filenames, tmp)
     }

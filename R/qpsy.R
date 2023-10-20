@@ -6,6 +6,7 @@
 #'
 #' Read all results files (.csv) from the server and write to dataframe
 #' @param exp String. The name of the data folder of the experiment to be loaded.
+#' @param site Either "q" for qpsy.de or "g" for ganzfeld.study.
 #' @param subdirs Logical. Should subdirectories be considered?
 #' @param splitreponse Logical. Should survey responses be automatically written into separate columns?
 #' @return Dataframe containing all trials of the combined result files.
@@ -13,7 +14,11 @@
 #' myexp <- loadexp("myexp")
 #' @export
 
-loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
+loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
+  
+  # which site to use
+  domain <- "qpsy.de"
+  if(site == "g") domain <- "ganzfeld.study"
 
   # check if config containing user and password is already downloaded
   key <- try(config::get("qpsy"), silent = T)
@@ -33,7 +38,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
   if(inherits(key, "try-error")) stop("Wrong credentials! Please try again.")
 
   # read the page
-  burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
+  burl <- paste0("https://",key$uid,":",key$pwd,"@",domain,"/data/")
   url <- paste0(burl,exp,"/")
   page <- rvest::read_html(url)
 
@@ -88,7 +93,7 @@ loadexp <- function(exp, subdirs=TRUE, splitresponse=TRUE){
 .rff <- function(exp){
   key <- config::get("qpsy")
 
-  burl <- paste0("https://",key$uid,":",key$pwd,"@qpsy.de/data/")
+  burl <- paste0("https://",key$uid,":",key$pwd,"@",domain,"/data/")
   url <- paste0(burl,exp,"/")
   page <- rvest::read_html(url)
 

@@ -54,7 +54,7 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
 
     if(length(folders > 0)){
       for (f in folders){
-        tmp <- .rff(paste0(exp,"/",f))
+        tmp <- .rff(paste0(exp,"/",f), site)
         if(length(tmp)>0) tmp <- paste0(f,tmp)
         filenames <- append(filenames, tmp)
       }
@@ -90,7 +90,12 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
 
 # Helper function: Read files recursively
 
-.rff <- function(exp){
+.rff <- function(exp, site){
+  
+  # which site to use
+  domain <- "qpsy.de"
+  if(site == "g") domain <- "ganzfeld.study"
+  
   key <- config::get("qpsy")
 
   burl <- paste0("https://",key$uid,":",key$pwd,"@",domain,"/data/")
@@ -107,7 +112,7 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
 
   if(length(folders > 0)){
     for (f in folders){
-      tmp <- .rff(paste0(exp,"/",f))
+      tmp <- .rff(paste0(exp,"/",f), site)
       if(length(tmp)>0) tmp <- paste0(f,tmp)
       filenames <- append(filenames, tmp)
     }

@@ -145,6 +145,7 @@ splitresponse <- function(data){
     dplyr::filter(grepl("\\{\"",response)) %>% #only lines that contain JSON responses
     dplyr::mutate(
       tmp = jsonlite::stream_in(textConnection(response), simplifyDataFrame = FALSE),
+      tmp = lapply(tmp, function(x) replace(x,which(x==""),NA)),
       tmp = lapply(tmp, dplyr::bind_cols)
     ) %>%
     tidyr::unnest(tmp) %>%

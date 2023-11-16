@@ -80,7 +80,10 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
 
   # split responses
   if(splitresponse == TRUE){
-    out <- splitresponse(out)
+    if(
+      "response" %in% colnames(out) & 
+      nrow(dplyr::filter(out, grepl("\\{\"",response)))>0
+      ) out <- splitresponse(out)
   }
 
   out
@@ -137,6 +140,7 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
 
 splitresponse <- function(data){
   if(!("response" %in% colnames(data))) stop("Dataframe does not contain a \"response\" column")
+  if(nrow(dplyr::filter(data, grepl("\\{\"",response)))==0) stop("No responses found")
 
   message("Splitting responses...")
   data$line <- as.numeric(row.names(data))

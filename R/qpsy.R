@@ -80,10 +80,11 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
 
   # split responses
   if(splitresponse == TRUE){
-    if(
-      "response" %in% colnames(out) & 
-      nrow(dplyr::filter(out, grepl("\\{\"",response)))>0
-      ) out <- splitresponse(out)
+    if ("response" %in% colnames(out)) {
+      if (nrow(dplyr::filter(out, grepl("\\{\"", response))) > 0) {
+        out <- splitresponse(out)
+      }
+    }
   }
 
   out

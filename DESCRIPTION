@@ -1,7 +1,7 @@
 Package: qpsy
 Type: Package
 Title: Functions to use for online experiments with jsPsych on qpsy.de
-Version: 0.2.3
+Version: 0.2.4
 Authors@R: person("Moritz", "Dechamps", email = "moritz.dechamps@psy.lmu.de",
   role = c("aut", "cre"))
 Description: Use these functions for your data analysis with experiments stored on qpsy.de

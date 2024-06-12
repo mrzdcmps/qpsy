@@ -9,12 +9,13 @@
 #' @param site Either "q" for qpsy.de or "g" for ganzfeld.study.
 #' @param subdirs Logical. Should subdirectories be considered?
 #' @param splitreponse Logical. Should survey responses be automatically written into separate columns?
+#' @param localcopy Logical. Should a local copy be saved and used for future calls?
 #' @return Dataframe containing all trials of the combined result files.
 #' @examples
 #' myexp <- loadexp("myexp")
 #' @export
 
-loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
+loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE, localcopy=TRUE){
   
   # which site to use
   domain <- "qpsy.de"
@@ -68,6 +69,23 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
   # create links
   links <- paste0(url, filenames)
   links <- gsub(" ", "%20", links)
+  
+  # look for local copy
+  exp_escape <- gsub("/", "-", exp)
+  if(localcopy == TRUE){
+    if(file.exists(paste0("raw_",exp_escape,".rds"))){
+      message("Local copy found.")
+      old <- readRDS(paste0("raw_",exp_escape,".rds"))
+      oldfiles <- length(unique(old$file))
+      newfiles <- length(unique(filenames))
+      if(oldfiles == newfiles){
+        message("No new files found. Using local copy.")
+        return(old)
+      } else {
+        message("New files found. Updating local copy.")
+      }
+    }
+  }
 
   # read and bind files
   raw <- pbapply::pblapply(links, data.table::fread, showProgress = FALSE)
@@ -85,6 +103,11 @@ loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE){
         out <- splitresponse(out)
       }
     }
+  }
+  
+  # save local copy
+  if(localcopy == TRUE){
+      saveRDS(out, file=paste0("raw_",exp_escape,".rds"))
   }
 
   out

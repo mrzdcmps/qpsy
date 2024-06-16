@@ -1,0 +1,208 @@
+---
+title: "qpsy Vignette"
+author: "Moritz C. Dechamps"
+date: "2024-06-15"
+output: 
+  html_document:
+    keep_md: true
+    self_contained: true
+    toc: true
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Libraries
+
+```{r}
+library(qpsy)
+library(tidyverse)
+```
+
+### Import Raw Data From Server
+
+`loadexp()` directly downloads the raw data from the server.
+The function has several arguments:
+
+-   `study`: the directory of the study data (e.g. "testdata" or "testdata/study2")
+-   `subdirs`: whether subdirectories should be included (e.g. multiple study parts "study1" and "study2" or files from different experimenters.)
+-   `splitresponse`: whether responses to questionnaire trials should be stored as separate variables (e.g. "age", "gender", "questionnaire_item1", etc.)
+-   `localcopy`: whether the data should be saved locally (e.g. "testdata.rds")
+
+You will need to type in the password the first time you load data from the server.
+Please contact [moritz.dechamps\@psy.lmu.de](mailto:moritz.dechamps@psy.lmu.de){.email} for the password.
+
+```{r}
+raw <- loadexp("testdata", subdirs = TRUE, splitresponse = TRUE, localcopy = TRUE)
+```
+
+### Inspect Data
+
+jsPsych outputs one line per trial.
+In this example, the first line is language selection, the second is the consent form, the third are the welcome page.
+
+```{r}
+print(raw)
+str(raw)
+View(raw)
+
+# file: id of individual response file (not ordered)
+# rt: reaction time in ms
+# stimulus: stimulus / text presented
+# response: response given by participant
+# ...
+# study: study name and study part
+# subject: subject id
+# time: time of data collection (UTC+0)
+# more variables, e.g. condition, group, test_part, etc.
+```
+
+### Create Data Frame with 1 row per participant
+
+Generally, we want to transform the raw data containing 1 line per trial into a data frame with 1 row per participant.
+Additionally, we will perform some cleaning, recoding, and transformations.
+Important functions:
+
+-   `group_by()`: group data frame by a variable (this way hits will be calculated per participant and not for all participants).
+-   `mutate()`: add new variables to data frame.
+-   `distinct()`: keep only unique rows.
+-   `select()`: select variables.
+-   `filter()`: filter rows to meet a condition.
+-   `rowwise()`: calculate values per row (= participant). This is useful when calculating questionnaire scores. Turn off with `ungroup()`.
+-   `summarise()`: aggregate data to summary statistics.
+
+```{r}
+df_all <- raw %>%                         # select raw data
+  group_by(file) %>%                      # group by file = participations
+  mutate(hits = sum(qbit, na.rm=T)) %>%   # sum up all qbits per file
+  distinct(file, .keep_all=T) %>%         # keep only one row per file
+  select(-c(rt:internal_node_id, url:view_history, accuracy, qbit)) %>% 
+                                          # drop unnecessary columns
+  mutate(                                 # reverse score BLLS_3 and BLLS_4 (0 -> 4; 4 -> 0)
+    BLLS_3 = -BLLS_3+4,
+    BLLS_4 = -BLLS_4+4,
+  ) %>%                                   
+  mutate(                                 # if multiple languages, recode to English
+    gender = case_when(
+      gender %in% c("male", "männlich") ~ "male",
+      gender %in% c("female", "weiblich") ~ "female",
+      gender %in% c("divers", "other") ~ "other"
+    )
+  ) %>%
+  rowwise() %>%                           # calculate scores per row / participant
+  mutate(BLLS_score = mean(c(BLLS_1, BLLS_2, BLLS_3, BLLS_4))) %>% 
+                                          # mean score of BLLS_1 to BLLS_4
+  ungroup() %>%                           # ungroup data frame
+  arrange(time)                           # sort by time of data collection
+
+print(df_all)
+
+```
+
+### Add More Variables to Data Frame
+
+There might be information in some rows of the raw data that we want to add to our final data frame.
+We can use `filter()` to select trials with the relevant information and `mutate()` to add new variables to the existing ones or `summarise()` to create a data set of only new variables.
+In this example, we want to add the response of the button press trial, the reaction times and the qbits of each rng-trial
+
+```{r}
+# We want to add the response of the button press trial and include the reaction times.
+buttonChoice <- raw %>%
+  filter(test_part=="buttonChoice") %>%   # filter for buttonChoice trials
+  mutate(rt = as.numeric(rt)) %>%         # convert rt to numeric
+  group_by(file) %>%                      # group by file = participations
+  summarise(buttonChoice = response, rtChoice = mean(rt))        
+                                          # print response and calculate mean reaction time per file (mean not actually necessary in case of 1 observation)
+
+print(buttonChoice)
+
+# We want to have the qbits of each trial as separate variables
+qbits <- raw %>%
+  filter(test_part=="rngTrial") %>%       # filter for qbit trials
+  select(file, qbit) %>%                  # select variables "file" and "qbit"
+  mutate(trial = rep(1:10, length(unique(file)))) %>% 
+                                          # create variable "trial" with values 1 to 10 to distinguish between trials
+  pivot_wider(id_cols = file, values_from = qbit, names_from = trial, names_prefix = "qbit") 
+                                          # create separate variables for each qbit
+
+print(qbits)
+
+# Merge the new variables to the data frame
+df_all <- df_all %>%
+  left_join(buttonChoice, by="file") %>%  # join buttonChoice and rtButton to df_all
+  left_join(qbits, by="file")             # join qbits to df_all
+
+print(df_all)
+```
+
+### Exclude Participants
+
+We have successfully created a data frame with 1 row per participant.
+Now we want to exclude participants who should not be included in the analysis.
+This might be duplicate participations, underage participants, or participants who failed the data integrity question.
+We can use `filter()` to exclude participants based on a condition and `distinct()` to keep only unique participations of one participant.
+
+```{r}
+# Check if there are duplicate subject ids
+anyDuplicated(df_all$subject)
+
+# Create final data frame
+df <- df_all %>%
+  distinct(subject, .keep_all = TRUE) %>%  # keep only unique participations
+  filter(handaufsherz %in% c("Ja", "Yes")) %>% 
+                                           # filter for participants who answered the data integrity question correctly
+  filter(age >= 18)                        # use only participants over 18
+```
+
+### Save Data Frame as CSV
+
+We can save the data as .csv-file, e.g. to analyze it with JASP.
+
+```{r}
+write_csv2(df, "testdata.csv")
+```
+
+### Describe Final Data
+
+Now we can analyze the data.
+First, we should check the descriptive statistics.
+We can use `describe()` from the `psych` package for descriptive statistics and `table()` for frequencies.
+
+```{r}
+library(psych)
+df %>%
+  select(age, hits, BLLS_score) %>%
+  describe()                        # use describe() from psych package for descriptive statistics
+
+table(df$gender)                    # use table() for frequencies
+table(df$condition)                 # use table() for frequencies
+table(df$bildung)                   # use table() for frequencies
+```
+
+### Analyze and Visualize Data
+
+Finally, we can do our analyses.
+E.g. we might want to check for group differences with a t-test or ANOVA, or we might want to visualize the data with `ggplot()`.
+For more information on Bayesian testing using the `changeofevidence` package, see [changeofevidence t-test Vignette](https://mrzdcmps.github.io/changeofevidence/vignette-t-test.html).
+
+```{r}
+# t-test for group differences in hits
+t.test(hits ~ condition, data=df, var.equal=T)
+
+# Bayesian t-test for group differences in hits
+library(changeofevidence)
+bf <- bfttest(hits ~ condition, data=df)
+plot(bf)
+
+# ANOVA for group differences in BLLS_score
+aov(df$BLLS_score ~ df$condition)
+
+# Plot scatterplot of hits and BLLS_score
+ggplot(df, aes(x=hits, y=BLLS_score, color=condition)) +
+  geom_point() +
+  theme_minimal()
+```

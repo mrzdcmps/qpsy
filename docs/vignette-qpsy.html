@@ -415,8 +415,12 @@ from the server. Please contact <a href="mailto:moritz.dechamps@psy.lmu.de" clas
 <div id="inspect-data" class="section level3">
 <h3>Inspect Data</h3>
 <p>jsPsych outputs one line per trial. In this example, the first line
-is language selection, the second is the consent form, the third are the
-welcome page.</p>
+is language selection, the second is the consent form, the third is the
+welcome page, then a survey, and a couple of rng-trials. You can use
+<code>print()</code> to view the first lines, <code>str()</code> to get
+an overview of the structure, i.e. all variables (columns) and their
+types, and <code>View()</code> to inspect the data in a new RStudio
+tab.</p>
 <pre class="r"><code>print(raw)</code></pre>
 <pre><code>## # A tibble: 102 × 26
 ##     file rt    stimulus             response trial_type trial_index time_elapsed
@@ -465,27 +469,28 @@ welcome page.</p>
 ##  $ bildung         : chr [1:102] &quot;Fach- oder Hochschulreife (Abitur)&quot; &quot;Fach- oder Hochschulreife (Abitur)&quot; &quot;Fach- oder Hochschulreife (Abitur)&quot; &quot;Fach- oder Hochschulreife (Abitur)&quot; ...
 ##  $ handaufsherz    : chr [1:102] &quot;Ja&quot; &quot;Ja&quot; &quot;Ja&quot; &quot;Ja&quot; ...
 ##  $ ungewoehnlich   : chr [1:102] &quot;Alles tip top!&quot; &quot;Alles tip top!&quot; &quot;Alles tip top!&quot; &quot;Alles tip top!&quot; ...</code></pre>
-<pre class="r"><code>View(raw)
-
-# file: id of individual response file (not ordered)
-# rt: reaction time in ms
-# stimulus: stimulus / text presented
-# response: response given by participant
-# ...
-# study: study name and study part
-# subject: subject id
-# time: time of data collection (UTC+0)
-# more variables, e.g. condition, group, test_part, etc.</code></pre>
+<pre class="r"><code>View(raw)</code></pre>
+<p>Interesting variables:</p>
+<ul>
+<li>file: id of individual response file (not ordered temporally)</li>
+<li>rt: reaction time in ms</li>
+<li>stimulus: stimulus / text presented</li>
+<li>response: response given by participant</li>
+<li>study: study name and study part</li>
+<li>subject: subject id</li>
+<li>time: time of data collection (UTC+0)</li>
+<li>more variables, e.g. condition, group, test_part, etc.</li>
+</ul>
 </div>
 <div id="create-data-frame-with-1-row-per-participant" class="section level3">
 <h3>Create Data Frame with 1 row per participant</h3>
-<p>Generally, we want to transform the raw data containing 1 line per
+<p>Generally, we want to transform the raw data containing 1 row per
 trial into a data frame with 1 row per participant. Additionally, we
 will perform some cleaning, recoding, and transformations. Important
 functions:</p>
 <ul>
 <li><code>group_by()</code>: group data frame by a variable (this way
-hits will be calculated per participant and not for all
+‘hits’ will be calculated per participant and not for all
 participants).</li>
 <li><code>mutate()</code>: add new variables to data frame.</li>
 <li><code>distinct()</code>: keep only unique rows.</li>
@@ -500,7 +505,7 @@ This is useful when calculating questionnaire scores. Turn off with
   group_by(file) %&gt;%                      # group by file = participations
   mutate(hits = sum(qbit, na.rm=T)) %&gt;%   # sum up all qbits per file
   distinct(file, .keep_all=T) %&gt;%         # keep only one row per file
-  select(-c(rt:internal_node_id, url:view_history, accuracy, qbit)) %&gt;% 
+  select(-c(rt:internal_node_id, url:qbit)) %&gt;% 
                                           # drop unnecessary columns
   mutate(                                 # reverse score BLLS_3 and BLLS_4 (0 -&gt; 4; 4 -&gt; 0)
     BLLS_3 = -BLLS_3+4,
@@ -520,28 +525,31 @@ This is useful when calculating questionnaire scores. Turn off with
   arrange(time)                           # sort by time of data collection
 
 print(df_all)</code></pre>
-<pre><code>## # A tibble: 6 × 17
-##    file study     subject  time                condition test_part BLLS_1 BLLS_2
-##   &lt;int&gt; &lt;chr&gt;     &lt;chr&gt;    &lt;dttm&gt;              &lt;chr&gt;     &lt;chr&gt;      &lt;int&gt;  &lt;int&gt;
-## 1     1 testdata1 sohh7ga… 2024-06-15 16:51:05 exp       &quot;&quot;             0      1
-## 2     2 testdata1 u31kk1d… 2024-06-15 16:51:36 exp       &quot;&quot;             0      3
-## 3     3 testdata1 qlekt14… 2024-06-15 16:51:59 exp       &quot;&quot;             1      0
-## 4     4 testdata1 rnlxf3g… 2024-06-15 16:52:39 con       &quot;&quot;             1      2
-## 5     5 testdata1 6vmltub… 2024-06-16 12:18:22 con       &quot;&quot;             3      3
-## 6     6 testdata1 pgbcm2d… 2024-06-16 12:21:12 exp       &quot;&quot;             0      4
-## # ℹ 9 more variables: BLLS_3 &lt;dbl&gt;, BLLS_4 &lt;dbl&gt;, age &lt;int&gt;, gender &lt;chr&gt;,
-## #   bildung &lt;chr&gt;, handaufsherz &lt;chr&gt;, ungewoehnlich &lt;chr&gt;, hits &lt;int&gt;,
-## #   BLLS_score &lt;dbl&gt;</code></pre>
+<pre><code>## # A tibble: 6 × 16
+##    file study  subject time                condition BLLS_1 BLLS_2 BLLS_3 BLLS_4
+##   &lt;int&gt; &lt;chr&gt;  &lt;chr&gt;   &lt;dttm&gt;              &lt;chr&gt;      &lt;int&gt;  &lt;int&gt;  &lt;dbl&gt;  &lt;dbl&gt;
+## 1     1 testd… sohh7g… 2024-06-15 16:51:05 exp            0      1      2      1
+## 2     2 testd… u31kk1… 2024-06-15 16:51:36 exp            0      3      0      0
+## 3     3 testd… qlekt1… 2024-06-15 16:51:59 exp            1      0      4      2
+## 4     4 testd… rnlxf3… 2024-06-15 16:52:39 con            1      2      1      0
+## 5     5 testd… 6vmltu… 2024-06-16 12:18:22 con            3      3      0      0
+## 6     6 testd… pgbcm2… 2024-06-16 12:21:12 exp            0      4      1      3
+## # ℹ 7 more variables: age &lt;int&gt;, gender &lt;chr&gt;, bildung &lt;chr&gt;,
+## #   handaufsherz &lt;chr&gt;, ungewoehnlich &lt;chr&gt;, hits &lt;int&gt;, BLLS_score &lt;dbl&gt;</code></pre>
 </div>
 <div id="add-more-variables-to-data-frame" class="section level3">
 <h3>Add More Variables to Data Frame</h3>
 <p>There might be information in some rows of the raw data that we want
 to add to our final data frame. We can use <code>filter()</code> to
-select trials with the relevant information and <code>mutate()</code> to
-add new variables to the existing ones or <code>summarise()</code> to
-create a data set of only new variables. In this example, we want to add
-the response of the button press trial, the reaction times and the qbits
-of each rng-trial</p>
+select trials (=rows) with the relevant information and
+<code>mutate()</code> to add new variables to the existing ones or
+<code>summarise()</code> to create a data set of only new variables. We
+can use <code>pivot_wider()</code> to transform multiple rows of 1
+participant into 1 row with multiple columns. We can merge these new
+data frames with the existing data frame using
+<code>left_join()</code>.</p>
+<p>In this example, we want to add the response and reaction time of the
+button press trial, and the individual qbits of each rng-trial.</p>
 <pre class="r"><code># We want to add the response of the button press trial and include the reaction times.
 buttonChoice &lt;- raw %&gt;%
   filter(test_part==&quot;buttonChoice&quot;) %&gt;%   # filter for buttonChoice trials
@@ -581,40 +589,40 @@ print(qbits)</code></pre>
 ## 6     6     0     0     1     1     0     1     0     1     0      0</code></pre>
 <pre class="r"><code># Merge the new variables to the data frame
 df_all &lt;- df_all %&gt;%
-  left_join(buttonChoice, by=&quot;file&quot;) %&gt;%  # join buttonChoice and rtButton to df_all
+  left_join(buttonChoice, by=&quot;file&quot;) %&gt;%  # join buttonChoice to df_all
   left_join(qbits, by=&quot;file&quot;)             # join qbits to df_all
 
 print(df_all)</code></pre>
-<pre><code>## # A tibble: 6 × 29
-##    file study     subject  time                condition test_part BLLS_1 BLLS_2
-##   &lt;int&gt; &lt;chr&gt;     &lt;chr&gt;    &lt;dttm&gt;              &lt;chr&gt;     &lt;chr&gt;      &lt;int&gt;  &lt;int&gt;
-## 1     1 testdata1 sohh7ga… 2024-06-15 16:51:05 exp       &quot;&quot;             0      1
-## 2     2 testdata1 u31kk1d… 2024-06-15 16:51:36 exp       &quot;&quot;             0      3
-## 3     3 testdata1 qlekt14… 2024-06-15 16:51:59 exp       &quot;&quot;             1      0
-## 4     4 testdata1 rnlxf3g… 2024-06-15 16:52:39 con       &quot;&quot;             1      2
-## 5     5 testdata1 6vmltub… 2024-06-16 12:18:22 con       &quot;&quot;             3      3
-## 6     6 testdata1 pgbcm2d… 2024-06-16 12:21:12 exp       &quot;&quot;             0      4
-## # ℹ 21 more variables: BLLS_3 &lt;dbl&gt;, BLLS_4 &lt;dbl&gt;, age &lt;int&gt;, gender &lt;chr&gt;,
-## #   bildung &lt;chr&gt;, handaufsherz &lt;chr&gt;, ungewoehnlich &lt;chr&gt;, hits &lt;int&gt;,
-## #   BLLS_score &lt;dbl&gt;, buttonChoice &lt;chr&gt;, rtChoice &lt;dbl&gt;, qbit1 &lt;int&gt;,
-## #   qbit2 &lt;int&gt;, qbit3 &lt;int&gt;, qbit4 &lt;int&gt;, qbit5 &lt;int&gt;, qbit6 &lt;int&gt;,
-## #   qbit7 &lt;int&gt;, qbit8 &lt;int&gt;, qbit9 &lt;int&gt;, qbit10 &lt;int&gt;</code></pre>
+<pre><code>## # A tibble: 6 × 28
+##    file study  subject time                condition BLLS_1 BLLS_2 BLLS_3 BLLS_4
+##   &lt;int&gt; &lt;chr&gt;  &lt;chr&gt;   &lt;dttm&gt;              &lt;chr&gt;      &lt;int&gt;  &lt;int&gt;  &lt;dbl&gt;  &lt;dbl&gt;
+## 1     1 testd… sohh7g… 2024-06-15 16:51:05 exp            0      1      2      1
+## 2     2 testd… u31kk1… 2024-06-15 16:51:36 exp            0      3      0      0
+## 3     3 testd… qlekt1… 2024-06-15 16:51:59 exp            1      0      4      2
+## 4     4 testd… rnlxf3… 2024-06-15 16:52:39 con            1      2      1      0
+## 5     5 testd… 6vmltu… 2024-06-16 12:18:22 con            3      3      0      0
+## 6     6 testd… pgbcm2… 2024-06-16 12:21:12 exp            0      4      1      3
+## # ℹ 19 more variables: age &lt;int&gt;, gender &lt;chr&gt;, bildung &lt;chr&gt;,
+## #   handaufsherz &lt;chr&gt;, ungewoehnlich &lt;chr&gt;, hits &lt;int&gt;, BLLS_score &lt;dbl&gt;,
+## #   buttonChoice &lt;chr&gt;, rtChoice &lt;dbl&gt;, qbit1 &lt;int&gt;, qbit2 &lt;int&gt;, qbit3 &lt;int&gt;,
+## #   qbit4 &lt;int&gt;, qbit5 &lt;int&gt;, qbit6 &lt;int&gt;, qbit7 &lt;int&gt;, qbit8 &lt;int&gt;,
+## #   qbit9 &lt;int&gt;, qbit10 &lt;int&gt;</code></pre>
 </div>
 <div id="exclude-participants" class="section level3">
 <h3>Exclude Participants</h3>
 <p>We have successfully created a data frame with 1 row per participant.
 Now we want to exclude participants who should not be included in the
-analysis. This might be duplicate participations, underage participants,
-or participants who failed the data integrity question. We can use
-<code>filter()</code> to exclude participants based on a condition and
-<code>distinct()</code> to keep only unique participations of one
-participant.</p>
+analysis. This could be duplicate participations, underage participants,
+or participants who failed the data integrity question.</p>
+<p>We can use <code>filter()</code> to exclude participants based on a
+condition and <code>distinct()</code> to keep only unique participations
+of one participant.</p>
 <pre class="r"><code># Check if there are duplicate subject ids
 anyDuplicated(df_all$subject)</code></pre>
 <pre><code>## [1] 0</code></pre>
 <pre class="r"><code># Create final data frame
 df &lt;- df_all %&gt;%
-  distinct(subject, .keep_all = TRUE) %&gt;%  # keep only unique participations
+  distinct(subject, .keep_all = TRUE) %&gt;%  # keep only the first participation if a subject id is duplicated
   filter(handaufsherz %in% c(&quot;Ja&quot;, &quot;Yes&quot;)) %&gt;% 
                                            # filter for participants who answered the data integrity question correctly
   filter(age &gt;= 18)                        # use only participants over 18</code></pre>
@@ -637,8 +645,8 @@ statistics. We can use <code>describe()</code> from the
 ## 
 ##     %+%, alpha</code></pre>
 <pre class="r"><code>df %&gt;%
-  select(age, hits, BLLS_score) %&gt;%
-  describe()                        # use describe() from psych package for descriptive statistics</code></pre>
+  select(age, hits, BLLS_score) %&gt;% # select which variables to describe
+  describe()                        # use describe() for descriptive statistics</code></pre>
 <pre><code>##            vars n  mean    sd median trimmed  mad min max range  skew kurtosis
 ## age           1 4 34.00 14.45  30.00   34.00 9.64  22  54    32  0.46    -1.92
 ## hits          2 4  5.75  1.50   6.00    5.75 1.48   4   7     3 -0.14    -2.28
@@ -647,14 +655,26 @@ statistics. We can use <code>describe()</code> from the
 ## age        7.22
 ## hits       0.75
 ## BLLS_score 0.24</code></pre>
+<pre class="r"><code># describe by group (condition)
+describeBy(hits + BLLS_score ~ condition, data=df)</code></pre>
+<pre><code>## 
+##  Descriptive statistics by group 
+## condition: con
+##            vars n mean   sd median trimmed  mad min max range skew kurtosis
+## hits          1 2 6.00 1.41   6.00    6.00 1.48   5 7.0   2.0    0    -2.75
+## BLLS_score    2 2 1.25 0.35   1.25    1.25 0.37   1 1.5   0.5    0    -2.75
+##              se
+## hits       1.00
+## BLLS_score 0.25
+## ------------------------------------------------------------ 
+## condition: exp
+##            vars n mean   sd median trimmed  mad min max range skew kurtosis  se
+## hits          1 2  5.5 2.12    5.5     5.5 2.22   4   7     3    0    -2.75 1.5
+## BLLS_score    2 2  1.5 0.71    1.5     1.5 0.74   1   2     1    0    -2.75 0.5</code></pre>
 <pre class="r"><code>table(df$gender)                    # use table() for frequencies</code></pre>
 <pre><code>## 
 ## female   male 
 ##      2      2</code></pre>
-<pre class="r"><code>table(df$condition)                 # use table() for frequencies</code></pre>
-<pre><code>## 
-## con exp 
-##   2   2</code></pre>
 <pre class="r"><code>table(df$bildung)                   # use table() for frequencies</code></pre>
 <pre><code>## 
 ## Fach- oder Hochschulreife (Abitur)                     Mittlere Reife 
@@ -664,10 +684,11 @@ statistics. We can use <code>describe()</code> from the
 </div>
 <div id="analyze-and-visualize-data" class="section level3">
 <h3>Analyze and Visualize Data</h3>
-<p>Finally, we can do our analyses. E.g. we might want to check for
+<p>Finally, we can do our analyses. E.g., we might want to check for
 group differences with a t-test or ANOVA, or we might want to visualize
-the data with <code>ggplot()</code>. For more information on Bayesian
-testing using the <code>changeofevidence</code> package, see <a href="https://mrzdcmps.github.io/changeofevidence/vignette-t-test.html">changeofevidence
+the data with <code>ggplot()</code>.</p>
+<p>For more information on Bayesian testing using the
+<code>changeofevidence</code> package, see <a href="https://mrzdcmps.github.io/changeofevidence/vignette-t-test.html">changeofevidence
 t-test Vignette</a>.</p>
 <pre class="r"><code># t-test for group differences in hits
 t.test(hits ~ condition, data=df, var.equal=T)</code></pre>
@@ -693,18 +714,12 @@ bf &lt;- bfttest(hits ~ condition, data=df)</code></pre>
 ## Final Bayes Factor: 0.928946 (t=0.2773501; p=0.8075499)</code></pre>
 <pre class="r"><code>plot(bf)</code></pre>
 <p><img src="data:image/png;base64,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" /><!-- --></p>
-<pre class="r"><code># ANOVA for group differences in BLLS_score
-aov(df$BLLS_score ~ df$condition)</code></pre>
-<pre><code>## Call:
-##    aov(formula = df$BLLS_score ~ df$condition)
-## 
-## Terms:
-##                 df$condition Residuals
-## Sum of Squares        0.0625    0.6250
-## Deg. of Freedom            1         2
-## 
-## Residual standard error: 0.559017
-## Estimated effects may be unbalanced</code></pre>
+<pre class="r"><code># ANOVA for gender differences in BLLS_score
+anova &lt;- aov(df$BLLS_score ~ df$gender)
+summary(anova)</code></pre>
+<pre><code>##             Df Sum Sq Mean Sq F value Pr(&gt;F)
+## df$gender    1 0.0625  0.0625     0.2  0.698
+## Residuals    2 0.6250  0.3125</code></pre>
 <pre class="r"><code># Plot scatterplot of hits and BLLS_score
 ggplot(df, aes(x=hits, y=BLLS_score, color=condition)) +
   geom_point() +

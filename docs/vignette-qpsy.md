@@ -64,7 +64,8 @@ raw <- loadexp("testdata", subdirs = TRUE, splitresponse = TRUE, localcopy = TRU
 ### Inspect Data
 
 jsPsych outputs one line per trial.
-In this example, the first line is language selection, the second is the consent form, the third are the welcome page.
+In this example, the first line is language selection, the second is the consent form, the third is the welcome page, then a survey, and a couple of rng-trials.
+You can use `print()` to view the first lines, `str()` to get an overview of the structure, i.e. all variables (columns) and their types, and `View()` to inspect the data in a new RStudio tab.
 
 
 ```r
@@ -129,25 +130,26 @@ str(raw)
 
 ```r
 View(raw)
-
-# file: id of individual response file (not ordered)
-# rt: reaction time in ms
-# stimulus: stimulus / text presented
-# response: response given by participant
-# ...
-# study: study name and study part
-# subject: subject id
-# time: time of data collection (UTC+0)
-# more variables, e.g. condition, group, test_part, etc.
 ```
+
+Interesting variables:
+
+-   file: id of individual response file (not ordered temporally)
+-   rt: reaction time in ms
+-   stimulus: stimulus / text presented
+-   response: response given by participant
+-   study: study name and study part
+-   subject: subject id
+-   time: time of data collection (UTC+0)
+-   more variables, e.g. condition, group, test_part, etc.
 
 ### Create Data Frame with 1 row per participant
 
-Generally, we want to transform the raw data containing 1 line per trial into a data frame with 1 row per participant.
+Generally, we want to transform the raw data containing 1 row per trial into a data frame with 1 row per participant.
 Additionally, we will perform some cleaning, recoding, and transformations.
 Important functions:
 
--   `group_by()`: group data frame by a variable (this way hits will be calculated per participant and not for all participants).
+-   `group_by()`: group data frame by a variable (this way 'hits' will be calculated per participant and not for all participants).
 -   `mutate()`: add new variables to data frame.
 -   `distinct()`: keep only unique rows.
 -   `select()`: select variables.
@@ -161,7 +163,7 @@ df_all <- raw %>%                         # select raw data
   group_by(file) %>%                      # group by file = participations
   mutate(hits = sum(qbit, na.rm=T)) %>%   # sum up all qbits per file
   distinct(file, .keep_all=T) %>%         # keep only one row per file
-  select(-c(rt:internal_node_id, url:view_history, accuracy, qbit)) %>% 
+  select(-c(rt:internal_node_id, url:qbit)) %>% 
                                           # drop unnecessary columns
   mutate(                                 # reverse score BLLS_3 and BLLS_4 (0 -> 4; 4 -> 0)
     BLLS_3 = -BLLS_3+4,
@@ -184,25 +186,26 @@ print(df_all)
 ```
 
 ```
-## # A tibble: 6 × 17
-##    file study     subject  time                condition test_part BLLS_1 BLLS_2
-##   <int> <chr>     <chr>    <dttm>              <chr>     <chr>      <int>  <int>
-## 1     1 testdata1 sohh7ga… 2024-06-15 16:51:05 exp       ""             0      1
-## 2     2 testdata1 u31kk1d… 2024-06-15 16:51:36 exp       ""             0      3
-## 3     3 testdata1 qlekt14… 2024-06-15 16:51:59 exp       ""             1      0
-## 4     4 testdata1 rnlxf3g… 2024-06-15 16:52:39 con       ""             1      2
-## 5     5 testdata1 6vmltub… 2024-06-16 12:18:22 con       ""             3      3
-## 6     6 testdata1 pgbcm2d… 2024-06-16 12:21:12 exp       ""             0      4
-## # ℹ 9 more variables: BLLS_3 <dbl>, BLLS_4 <dbl>, age <int>, gender <chr>,
-## #   bildung <chr>, handaufsherz <chr>, ungewoehnlich <chr>, hits <int>,
-## #   BLLS_score <dbl>
+## # A tibble: 6 × 16
+##    file study  subject time                condition BLLS_1 BLLS_2 BLLS_3 BLLS_4
+##   <int> <chr>  <chr>   <dttm>              <chr>      <int>  <int>  <dbl>  <dbl>
+## 1     1 testd… sohh7g… 2024-06-15 16:51:05 exp            0      1      2      1
+## 2     2 testd… u31kk1… 2024-06-15 16:51:36 exp            0      3      0      0
+## 3     3 testd… qlekt1… 2024-06-15 16:51:59 exp            1      0      4      2
+## 4     4 testd… rnlxf3… 2024-06-15 16:52:39 con            1      2      1      0
+## 5     5 testd… 6vmltu… 2024-06-16 12:18:22 con            3      3      0      0
+## 6     6 testd… pgbcm2… 2024-06-16 12:21:12 exp            0      4      1      3
+## # ℹ 7 more variables: age <int>, gender <chr>, bildung <chr>,
+## #   handaufsherz <chr>, ungewoehnlich <chr>, hits <int>, BLLS_score <dbl>
 ```
 
 ### Add More Variables to Data Frame
 
 There might be information in some rows of the raw data that we want to add to our final data frame.
-We can use `filter()` to select trials with the relevant information and `mutate()` to add new variables to the existing ones or `summarise()` to create a data set of only new variables.
-In this example, we want to add the response of the button press trial, the reaction times and the qbits of each rng-trial
+We can use `filter()` to select trials (=rows) with the relevant information and `mutate()` to add new variables to the existing ones or `summarise()` to create a data set of only new variables.
+We can use `pivot_wider()` to transform multiple rows of 1 participant into 1 row with multiple columns. We can merge these new data frames with the existing data frame using `left_join()`.
+
+In this example, we want to add the response and reaction time of the button press trial, and the individual qbits of each rng-trial.
 
 
 ```r
@@ -257,34 +260,35 @@ print(qbits)
 ```r
 # Merge the new variables to the data frame
 df_all <- df_all %>%
-  left_join(buttonChoice, by="file") %>%  # join buttonChoice and rtButton to df_all
+  left_join(buttonChoice, by="file") %>%  # join buttonChoice to df_all
   left_join(qbits, by="file")             # join qbits to df_all
 
 print(df_all)
 ```
 
 ```
-## # A tibble: 6 × 29
-##    file study     subject  time                condition test_part BLLS_1 BLLS_2
-##   <int> <chr>     <chr>    <dttm>              <chr>     <chr>      <int>  <int>
-## 1     1 testdata1 sohh7ga… 2024-06-15 16:51:05 exp       ""             0      1
-## 2     2 testdata1 u31kk1d… 2024-06-15 16:51:36 exp       ""             0      3
-## 3     3 testdata1 qlekt14… 2024-06-15 16:51:59 exp       ""             1      0
-## 4     4 testdata1 rnlxf3g… 2024-06-15 16:52:39 con       ""             1      2
-## 5     5 testdata1 6vmltub… 2024-06-16 12:18:22 con       ""             3      3
-## 6     6 testdata1 pgbcm2d… 2024-06-16 12:21:12 exp       ""             0      4
-## # ℹ 21 more variables: BLLS_3 <dbl>, BLLS_4 <dbl>, age <int>, gender <chr>,
-## #   bildung <chr>, handaufsherz <chr>, ungewoehnlich <chr>, hits <int>,
-## #   BLLS_score <dbl>, buttonChoice <chr>, rtChoice <dbl>, qbit1 <int>,
-## #   qbit2 <int>, qbit3 <int>, qbit4 <int>, qbit5 <int>, qbit6 <int>,
-## #   qbit7 <int>, qbit8 <int>, qbit9 <int>, qbit10 <int>
+## # A tibble: 6 × 28
+##    file study  subject time                condition BLLS_1 BLLS_2 BLLS_3 BLLS_4
+##   <int> <chr>  <chr>   <dttm>              <chr>      <int>  <int>  <dbl>  <dbl>
+## 1     1 testd… sohh7g… 2024-06-15 16:51:05 exp            0      1      2      1
+## 2     2 testd… u31kk1… 2024-06-15 16:51:36 exp            0      3      0      0
+## 3     3 testd… qlekt1… 2024-06-15 16:51:59 exp            1      0      4      2
+## 4     4 testd… rnlxf3… 2024-06-15 16:52:39 con            1      2      1      0
+## 5     5 testd… 6vmltu… 2024-06-16 12:18:22 con            3      3      0      0
+## 6     6 testd… pgbcm2… 2024-06-16 12:21:12 exp            0      4      1      3
+## # ℹ 19 more variables: age <int>, gender <chr>, bildung <chr>,
+## #   handaufsherz <chr>, ungewoehnlich <chr>, hits <int>, BLLS_score <dbl>,
+## #   buttonChoice <chr>, rtChoice <dbl>, qbit1 <int>, qbit2 <int>, qbit3 <int>,
+## #   qbit4 <int>, qbit5 <int>, qbit6 <int>, qbit7 <int>, qbit8 <int>,
+## #   qbit9 <int>, qbit10 <int>
 ```
 
 ### Exclude Participants
 
 We have successfully created a data frame with 1 row per participant.
 Now we want to exclude participants who should not be included in the analysis.
-This might be duplicate participations, underage participants, or participants who failed the data integrity question.
+This could be duplicate participations, underage participants, or participants who failed the data integrity question.
+
 We can use `filter()` to exclude participants based on a condition and `distinct()` to keep only unique participations of one participant.
 
 
@@ -300,7 +304,7 @@ anyDuplicated(df_all$subject)
 ```r
 # Create final data frame
 df <- df_all %>%
-  distinct(subject, .keep_all = TRUE) %>%  # keep only unique participations
+  distinct(subject, .keep_all = TRUE) %>%  # keep only the first participation if a subject id is duplicated
   filter(handaufsherz %in% c("Ja", "Yes")) %>% 
                                            # filter for participants who answered the data integrity question correctly
   filter(age >= 18)                        # use only participants over 18
@@ -339,8 +343,8 @@ library(psych)
 
 ```r
 df %>%
-  select(age, hits, BLLS_score) %>%
-  describe()                        # use describe() from psych package for descriptive statistics
+  select(age, hits, BLLS_score) %>% # select which variables to describe
+  describe()                        # use describe() for descriptive statistics
 ```
 
 ```
@@ -355,6 +359,28 @@ df %>%
 ```
 
 ```r
+# describe by group (condition)
+describeBy(hits + BLLS_score ~ condition, data=df)
+```
+
+```
+## 
+##  Descriptive statistics by group 
+## condition: con
+##            vars n mean   sd median trimmed  mad min max range skew kurtosis
+## hits          1 2 6.00 1.41   6.00    6.00 1.48   5 7.0   2.0    0    -2.75
+## BLLS_score    2 2 1.25 0.35   1.25    1.25 0.37   1 1.5   0.5    0    -2.75
+##              se
+## hits       1.00
+## BLLS_score 0.25
+## ------------------------------------------------------------ 
+## condition: exp
+##            vars n mean   sd median trimmed  mad min max range skew kurtosis  se
+## hits          1 2  5.5 2.12    5.5     5.5 2.22   4   7     3    0    -2.75 1.5
+## BLLS_score    2 2  1.5 0.71    1.5     1.5 0.74   1   2     1    0    -2.75 0.5
+```
+
+```r
 table(df$gender)                    # use table() for frequencies
 ```
 
@@ -362,16 +388,6 @@ table(df$gender)                    # use table() for frequencies
 ## 
 ## female   male 
 ##      2      2
-```
-
-```r
-table(df$condition)                 # use table() for frequencies
-```
-
-```
-## 
-## con exp 
-##   2   2
 ```
 
 ```r
@@ -389,7 +405,8 @@ table(df$bildung)                   # use table() for frequencies
 ### Analyze and Visualize Data
 
 Finally, we can do our analyses.
-E.g. we might want to check for group differences with a t-test or ANOVA, or we might want to visualize the data with `ggplot()`.
+E.g., we might want to check for group differences with a t-test or ANOVA, or we might want to visualize the data with `ggplot()`.
+
 For more information on Bayesian testing using the `changeofevidence` package, see [changeofevidence t-test Vignette](https://mrzdcmps.github.io/changeofevidence/vignette-t-test.html).
 
 
@@ -437,21 +454,15 @@ plot(bf)
 ![](vignette-qpsy_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
 
 ```r
-# ANOVA for group differences in BLLS_score
-aov(df$BLLS_score ~ df$condition)
+# ANOVA for gender differences in BLLS_score
+anova <- aov(df$BLLS_score ~ df$gender)
+summary(anova)
 ```
 
 ```
-## Call:
-##    aov(formula = df$BLLS_score ~ df$condition)
-## 
-## Terms:
-##                 df$condition Residuals
-## Sum of Squares        0.0625    0.6250
-## Deg. of Freedom            1         2
-## 
-## Residual standard error: 0.559017
-## Estimated effects may be unbalanced
+##             Df Sum Sq Mean Sq F value Pr(>F)
+## df$gender    1 0.0625  0.0625     0.2  0.698
+## Residuals    2 0.6250  0.3125
 ```
 
 ```r

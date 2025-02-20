@@ -282,7 +282,7 @@ get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_
 #' @param data Dataframe containing response data
 #' @param response_col Character. Name of the column containing JSON responses. Default "response"
 #' @param fill_direction Character. Direction to fill missing values: "downup" (default), "down", "up", or "none"
-#' @param keep_original Logical. Whether to keep the original response column (default: FALSE)
+#' @param keep_original Logical. Whether to keep the original response column (default: TRUE)
 #' @param simplify Logical. Whether to simplify single-element arrays to vectors (default: TRUE)
 #' @return Dataframe with JSON responses split into separate columns
 #' @examples
@@ -298,7 +298,7 @@ get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_
 splitresponse <- function(data, 
                           response_col = "response",
                           fill_direction = "downup",
-                          keep_original = FALSE,
+                          keep_original = TRUE,
                           simplify = TRUE) {
   
   # Input validation

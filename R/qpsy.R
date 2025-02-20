@@ -130,6 +130,31 @@ get_credentials <- function() {
   })
 }
 
+#' Safely read CSV files with error handling
+#' @param path Path to CSV file
+#' @return Data frame or NULL if read failed
+safely_read_csv <- function(path) {
+  tryCatch({
+    data.table::fread(path, showProgress = FALSE)
+  }, error = function(e) {
+    message(sprintf("Failed to read file: %s", path))
+    NULL
+  })
+}
+
+#' Clean JSON fields in the dataset
+#' @param df Data frame containing JSON fields
+#' @return Cleaned data frame
+clean_json_fields <- function(df) {
+  json_cols <- c("response", "responses", "view_history")
+  for (col in json_cols) {
+    if (col %in% colnames(df)) {
+      df[[col]] <- gsub("\"\"", "\"", df[[col]])
+    }
+  }
+  df
+}
+
 #' Process local copy if available
 #' @param exp_escape Escaped experiment name
 #' @param new_files List of new files

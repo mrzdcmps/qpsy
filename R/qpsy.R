@@ -405,23 +405,3 @@ splitresponse <- function(data,
   # Return result
   out
 }
-
-#' Helper function to preview JSON structure
-#' 
-#' Examines the first few JSON responses to show their structure
-#' @param data Dataframe containing response data
-#' @param response_col Column name containing JSON responses
-#' @param n Number of responses to examine
-#' @export
-preview_responses <- function(data, response_col = "response", n = 5) {
-  json_rows <- grepl("^\\s*\\{.*}\\s*$", data[[response_col]])
-  responses <- data[[response_col]][json_rows][1:min(n, sum(json_rows))]
-  
-  lapply(responses, function(x) {
-    tryCatch({
-      str(jsonlite::fromJSON(x))
-    }, error = function(e) {
-      paste("Failed to parse:", e$message)
-    })
-  })
-}

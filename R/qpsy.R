@@ -96,6 +96,40 @@ loadexp <- function(exp,
   raw_data
 }
 
+#' Get user credentials either from config or user input
+#' @return List containing uid and pwd, or NULL if failed
+get_credentials <- function() {
+  # Try to get existing config
+  key <- try(config::get("qpsy"), silent = TRUE)
+  
+  if (!inherits(key, "try-error")) {
+    return(key)
+  }
+  
+  # If no config, ask for password
+  user <- "serverdata"
+  
+  # Try RStudio API first, fall back to console
+  if (rstudioapi::isAvailable()) {
+    pw <- rstudioapi::askForPassword("Please enter the password")
+  } else {
+    pw <- readline("Please enter the password: ")
+  }
+  
+  # Try to download config
+  tryCatch({
+    download.file(
+      paste0("https://", user, ":", pw, "@qpsy.de/data/config.yml"), 
+      "config.yml",
+      quiet = TRUE
+    )
+    config::get("qpsy")
+  }, error = function(e) {
+    message("Failed to authenticate. Please check your credentials.")
+    NULL
+  })
+}
+
 #' Process local copy if available
 #' @param exp_escape Escaped experiment name
 #' @param new_files List of new files

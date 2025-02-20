@@ -293,7 +293,7 @@ get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_
 #' survey <- splitresponse(myexp, 
 #'                        response_col = "responses",
 #'                        fill_direction = "down",
-#'                        keep_original = TRUE)
+#'                        keep_original = FALSE)
 #' @export
 splitresponse <- function(data, 
                           response_col = "response",

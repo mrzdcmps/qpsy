@@ -2,200 +2,367 @@
 # General Psychology II // Department Psychology LMU
 # Dr. Moritz Dechamps
 
-#' Load Experimental Files from Server
+#' Load and process experimental files from server
 #'
-#' Read all results files (.csv) from the server and write to dataframe
+#' Reads and combines CSV files from server, optionally processing JSON response data
 #' @param exp String. The name of the data folder of the experiment to be loaded.
 #' @param site Either "q" for qpsy.de or "g" for ganzfeld.study.
-#' @param subdirs Logical. Should subdirectories be considered?
-#' @param splitreponse Logical. Should survey responses be automatically written into separate columns?
-#' @param localcopy Logical. Should a local copy be saved and used for future calls?
-#' @return Dataframe containing all trials of the combined result files.
+#' @param subdirs Logical. Should subdirectories be considered? Default: TRUE
+#' @param splitresponse Logical. Should survey responses be automatically written into separate columns? Default: TRUE
+#' @param localcopy Logical. Should a local copy be saved and used for future calls? Default: TRUE
+#' @param response_col Character. Name of the column containing JSON responses (default: "response")
+#' @param fill_direction Character. Direction to fill split responses: "downup" (default), "down", "up", or "none"
+#' @return Dataframe containing all trials of the combined result files
 #' @examples
+#' # Basic usage
 #' myexp <- loadexp("myexp")
+#' 
+#' # Custom response processing
+#' myexp <- loadexp("myexp", 
+#'                  splitresponse = TRUE,
+#'                  response_col = "responses")
 #' @export
-
-loadexp <- function(exp, site="q", subdirs=TRUE, splitresponse=TRUE, localcopy=TRUE){
+loadexp <- function(exp, 
+                    site = "q", 
+                    subdirs = TRUE, 
+                    splitresponse = TRUE, 
+                    localcopy = TRUE,
+                    response_col = "response",
+                    fill_direction = "downup") {
   
-  # which site to use
-  domain <- "qpsy.de"
-  if(site == "g") domain <- "ganzfeld.study"
-
-  # check if config containing user and password is already downloaded
-  key <- try(config::get("qpsy"), silent = T)
-
-  # ask for password and download config if it is not loaded
-  if(inherits(key, "try-error")){
-
-    user <- "serverdata"
-    pw <- rstudioapi::askForPassword("Please enter the password")
-
-    download.file(paste0("https://",user,":",pw,"@qpsy.de/data/config.yml"), "config.yml")
-    key <- config::get("qpsy")
-
+  # Input validation
+  if (!is.character(exp)) stop("exp must be a character string")
+  if (!site %in% c("q", "g")) stop("site must be either 'q' or 'g'")
+  
+  # Domain mapping
+  domains <- c(q = "qpsy.de", g = "ganzfeld.study")
+  domain <- domains[site]
+  
+  # Get credentials
+  credentials <- get_credentials()
+  if (is.null(credentials)) {
+    return(NULL)  # Error message already shown by get_credentials()
   }
-
-  # Give error if config could not be downloaded
-  if(inherits(key, "try-error")) stop("Wrong credentials! Please try again.")
-
-  # read the page
-  burl <- paste0("https://",key$uid,":",key$pwd,"@",domain,"/data/")
-  url <- paste0(burl,exp,"/")
-  page <- rvest::read_html(url)
-
-  # find the hrefs attributes which contain ".csv"
-  filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% rvest::html_text()
-
-  # look for subdirectories
-  if(subdirs == TRUE){
-    #list subdirectories
-    folders <- rvest::html_elements(page, xpath = ".//a[contains(@href, '/')]") %>% rvest::html_text()
-    #exclude "Parent directory"
-    folders <- folders[-1]
-
-    if(length(folders > 0)){
-      for (f in folders){
-        tmp <- .rff(paste0(exp,"/",f), site)
-        if(length(tmp)>0) tmp <- paste0(f,tmp)
-        filenames <- append(filenames, tmp)
-      }
-
-    }
+  
+  # Construct base URL
+  base_url <- paste0("https://", credentials$uid, ":", credentials$pwd, "@", domain, "/data/")
+  url <- paste0(base_url, exp, "/")
+  
+  # Try to read the page
+  page <- tryCatch({
+    rvest::read_html(url)
+  }, error = function(e) {
+    message("Could not connect to server. Please check your internet connection and credentials.")
+    return(NULL)
+  })
+  
+  if (is.null(page)) return(NULL)
+  
+  # Get files
+  filenames <- get_files(page, exp, site, subdirs, base_url)
+  if (length(filenames) == 0) {
+    message("No .csv files found in the specified folder.")
+    return(data.frame())
   }
-
-  # empty folder?
-  if(length(filenames) == 0) stop("No files found in folder.")
-
-  # create links
+  
+  # Process local copy if enabled
+  exp_escape <- gsub("/", "-", exp)
+  if (localcopy) {
+    local_result <- process_local_copy(exp_escape, filenames)
+    if (!is.null(local_result)) return(local_result)
+  }
+  
+  # Create and clean links
   links <- paste0(url, filenames)
   links <- gsub(" ", "%20", links)
   
-  # look for local copy
-  exp_escape <- gsub("/", "-", exp)
-  if(localcopy == TRUE){
-    if(file.exists(paste0("raw_",exp_escape,".rds"))){
-      message("Local copy found.")
-      old <- readRDS(paste0("raw_",exp_escape,".rds"))
-      oldfiles <- length(unique(old$file))
-      newfiles <- length(unique(filenames))
-      if(oldfiles == newfiles){
-        message("No new files found. Using local copy.")
-        return(old)
-      } else {
-        message("New files found. Updating local copy.")
-      }
-    }
-  }
-
-  # read and bind files
-  raw <- pbapply::pblapply(links, data.table::fread, showProgress = FALSE)
-  out <- data.table::rbindlist(raw, id="file", fill=T)
-
-  # fix double quotes on JSON input
-  if("response" %in% colnames(out)) out$response <- gsub("\"\"", "\"", out$response)
-  if("responses" %in% colnames(out)) out$responses <- gsub("\"\"", "\"", out$responses)
-  if("view_history" %in% colnames(out)) out$view_history <- gsub("\"\"", "\"", out$view_history)
-
-  # split responses
-  if(splitresponse == TRUE){
-    if ("response" %in% colnames(out)) {
-      if (nrow(dplyr::filter(out, grepl("\\{\"", response))) > 0) {
-        out <- splitresponse(out)
-      }
-    }
+  # Read and combine files
+  message("Reading files from server...")
+  raw_data <- read_and_combine_files(links)
+  if (is.null(raw_data)) return(data.frame())
+  
+  # Process responses if requested
+  if (splitresponse && response_col %in% colnames(raw_data)) {
+    raw_data <- process_responses(raw_data, 
+                                  response_col = response_col,
+                                  fill_direction = fill_direction)
   }
   
-  # save local copy
-  if(localcopy == TRUE){
-      saveRDS(out, file=paste0("raw_",exp_escape,".rds"))
+  # Save local copy if enabled
+  if (localcopy) {
+    saveRDS(raw_data, file = paste0("raw_", exp_escape, ".rds"))
   }
-
-  out
+  
+  raw_data
 }
 
-
-
-# Helper function: Read files recursively
-
-.rff <- function(exp, site){
+#' Process local copy if available
+#' @param exp_escape Escaped experiment name
+#' @param new_files List of new files
+#' @return Data frame or NULL if local copy shouldn't be used
+process_local_copy <- function(exp_escape, new_files) {
+  local_file <- paste0("raw_", exp_escape, ".rds")
+  if (!file.exists(local_file)) return(NULL)
   
-  # which site to use
-  domain <- "qpsy.de"
-  if(site == "g") domain <- "ganzfeld.study"
+  message("Local copy found.")
+  old_data <- readRDS(local_file)
+  old_files <- length(unique(old_data$file))
+  new_files_count <- length(unique(new_files))
   
-  key <- config::get("qpsy")
-
-  burl <- paste0("https://",key$uid,":",key$pwd,"@",domain,"/data/")
-  url <- paste0(burl,exp,"/")
-  page <- rvest::read_html(url)
-
-  #find all .csv files
-  filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% rvest::html_text()
-
-  #list subdirectories
-  folders <- rvest::html_elements(page, xpath = ".//a[contains(@href, '/')]") %>% rvest::html_text()
-  #exclude "Parent directory"
-  folders <- folders[-1]
-
-  if(length(folders > 0)){
-    for (f in folders){
-      tmp <- .rff(paste0(exp,"/",f), site)
-      if(length(tmp)>0) tmp <- paste0(f,tmp)
-      filenames <- append(filenames, tmp)
-    }
-
+  if (old_files == new_files_count) {
+    message("No new files found: Using local copy.")
+    return(old_data)
   }
+  
+  message("New files found: Updating local copy.")
+  NULL
+}
+
+#' Read and combine multiple CSV files
+#' @param links Vector of file URLs
+#' @return Combined data frame or NULL if all reads failed
+read_and_combine_files <- function(links) {
+  #raw <- pbapply::pblapply(links, safely_read_csv, showProgress = FALSE)
+  raw <- pbapply::pblapply(links, safely_read_csv)
+  raw <- Filter(Negate(is.null), raw)
+  
+  if (length(raw) == 0) {
+    message("No files could be read successfully.")
+    return(NULL)
+  }
+  
+  out <- data.table::rbindlist(raw, id = "file", fill = TRUE)
+  clean_json_fields(out)
+}
+
+#' Process JSON response data
+#' @param data Data frame containing response data
+#' @param response_col Name of response column
+#' @param fill_direction Direction to fill values
+#' @return Processed data frame
+process_responses <- function(data, 
+                              response_col = "response",
+                              fill_direction = "downup") {
+  
+  # Check if there are any JSON responses
+  if (!any(grepl("\\{\"", data[[response_col]]))) {
+    return(data)
+  }
+  
+  message("Splitting responses to columns...")
+  tryCatch({
+    splitresponse(data, 
+                  response_col = response_col,
+                  fill_direction = fill_direction)
+  }, error = function(e) {
+    message("Failed to process responses: ", e$message)
+    data
+  })
+}
+
+#' Get files recursively from server
+#' @param page HTML page content
+#' @param exp Experiment name
+#' @param site Site identifier
+#' @param subdirs Whether to include subdirectories
+#' @param base_url Base URL for the server
+#' @param current_path Current path for recursive calls (internal use)
+#' @return Character vector of filenames
+get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_path = "") {
+  # Get CSV files in current directory
+  filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% 
+    rvest::html_text()
+  
+  # If not checking subdirectories, return current files
+  if (!subdirs) {
+    return(filenames)
+  }
+  
+  # Get subdirectories (excluding parent directory)
+  folders <- rvest::html_elements(page, xpath = ".//a[contains(@href, '/')]") %>% 
+    rvest::html_text()
+  folders <- folders[-1]  # Remove "Parent directory"
+  
+  # Process subdirectories if any exist
+  if (length(folders) > 0) {
+    for (folder in folders) {
+      # Construct the new path
+      new_path <- if (current_path == "") {
+        paste0(exp, "/", folder)
+      } else {
+        paste0(current_path, "/", folder)
+      }
+      
+      # Read the subdirectory page
+      sub_url <- paste0(base_url, new_path, "/")
+      tryCatch({
+        sub_page <- rvest::read_html(sub_url)
+        # Get files from subdirectory
+        sub_files <- get_files(sub_page, exp, site, TRUE, base_url, new_path)
+        # Add folder prefix to filenames
+        if (length(sub_files) > 0) {
+          sub_files <- paste0(folder, sub_files)
+          filenames <- c(filenames, sub_files)
+        }
+      }, error = function(e) {
+        warning(sprintf("Could not access subdirectory: %s", folder))
+      })
+    }
+  }
+  
   filenames
 }
 
 
-#' Write responses into variables.
+#' Write responses into variables
 #'
-#' Write all answers from the "response"-column generated by a survey-plugin into individual variables.
-#' @return Generates new variables (columns) named after the question and storing the given responses.
+#' Write all answers from the "response" or "responses" column generated by a survey-plugin 
+#' into individual variables. Groups by 'file' column, falling back to 'subject' if 'file' 
+#' is not available.
+#' 
+#' @param data Dataframe containing response data
+#' @param response_col Character. Name of the column containing JSON responses. Default "response"
+#' @param fill_direction Character. Direction to fill missing values: "downup" (default), "down", "up", or "none"
+#' @param keep_original Logical. Whether to keep the original response column (default: FALSE)
+#' @param simplify Logical. Whether to simplify single-element arrays to vectors (default: TRUE)
+#' @return Dataframe with JSON responses split into separate columns
 #' @examples
+#' # Basic usage
 #' survey <- splitresponse(myexp)
-#'
-#' survey <- myexp %>%
-#'   filter(trial_part == "survey") %>%
-#'   splitresponse()
-#'
+#' 
+#' # Custom configuration
+#' survey <- splitresponse(myexp, 
+#'                        response_col = "responses",
+#'                        fill_direction = "down",
+#'                        keep_original = TRUE)
 #' @export
-
-splitresponse <- function(data){
-  if(!("response" %in% colnames(data))) stop("Dataframe does not contain a \"response\" column")
-  if(nrow(dplyr::filter(data, grepl("\\{\"",response)))==0) stop("No responses found")
-
-  message("Splitting responses...")
-  data$line <- as.numeric(row.names(data))
-
-  r <- data %>%
-    dplyr::filter(grepl("\\{\"",response)) %>% #only lines that contain JSON responses
-    dplyr::mutate(
-      tmp = jsonlite::stream_in(textConnection(response), simplifyDataFrame = FALSE),
-      tmp = lapply(tmp, function(x) replace(x,which(x==""),NA)),
-      tmp = lapply(tmp, dplyr::bind_cols)
-    ) %>%
-    tidyr::unnest(tmp) %>%
-    dplyr::select(line:last_col()) #select only new variables
-
-  out <- dplyr::left_join(data, r, by="line")
-
-  # fill to other rows of file
-  if("file" %in% colnames(data)){
-    out <- out %>%
-      dplyr::group_by(file) %>%
-      tidyr::fill(line:last_col() & -line, .direction = "downup") %>%
-      dplyr::ungroup()
-  } else if("subject" %in% colnames(data)){
-    out <- out %>%
-      dplyr::group_by(subject) %>%
-      tidyr::fill(line:last_col() & -line, .direction = "downup") %>%
-      dplyr::ungroup()
+splitresponse <- function(data, 
+                          response_col = "response",
+                          fill_direction = "downup",
+                          keep_original = FALSE,
+                          simplify = TRUE) {
+  
+  # Input validation
+  if (!is.data.frame(data)) {
+    stop("Input must be a data frame")
   }
-
-  out %>%
-    dplyr::select(-c(line))
+  
+  if (!response_col %in% colnames(data)) {
+    stop(sprintf("Column '%s' not found in data frame", response_col))
+  }
+  
+  if (!fill_direction %in% c("downup", "down", "up", "none")) {
+    stop("fill_direction must be one of: 'downup', 'down', 'up', 'none'")
+  }
+  
+  # Add row identifier for proper joining later
+  data$..row_id <- seq_len(nrow(data))
+  
+  # Find rows containing JSON responses
+  json_rows <- grepl("^\\s*\\{.*}\\s*$", data[[response_col]])
+  if (!any(json_rows)) {
+    warning("No valid JSON responses found")
+    return(data)
+  }
+  
+  # Function to safely parse JSON
+  safe_parse_json <- function(x) {
+    if (is.na(x) || !nzchar(trimws(x))) return(NULL)
+    tryCatch({
+      jsonlite::fromJSON(x, simplifyVector = simplify)
+    }, error = function(e) {
+      warning("Failed to parse JSON: ", e$message)
+      NULL
+    })
+  }
+  
+  # Parse JSON responses
+  #message("Parsing JSON responses...")
+  parsed_responses <- lapply(data[[response_col]][json_rows], safe_parse_json)
+  
+  # Remove NULL entries (failed parses)
+  valid_responses <- !sapply(parsed_responses, is.null)
+  if (!any(valid_responses)) {
+    warning("No valid JSON could be parsed")
+    return(data)
+  }
+  
+  parsed_responses <- parsed_responses[valid_responses]
+  response_rows <- which(json_rows)[valid_responses]
+  
+  # Convert list of responses to data frame
+  #message("Converting responses to columns...")
+  response_df <- tryCatch({
+    response_df <- dplyr::bind_rows(parsed_responses)
+    response_df$..row_id <- response_rows
+    response_df
+  }, error = function(e) {
+    stop("Failed to convert responses to columns: ", e$message)
+  })
+  
+  # Join with original data
+  out <- dplyr::left_join(data, response_df, by = "..row_id")
+  
+  # Fill missing values if requested
+  if (fill_direction != "none" && nrow(response_df) > 0) {
+    #message("Filling missing values...")
+    
+    fill_cols <- setdiff(colnames(response_df), "..row_id")
+    
+    # Determine grouping column
+    group_col <- if ("file" %in% colnames(out)) {
+      #message("Grouping by file")
+      "file"
+    } else if ("subject" %in% colnames(out)) {
+      message("File column not found, grouping by subject")
+      "subject"
+    } else {
+      message("Neither file nor subject columns found, filling without grouping")
+      NULL
+    }
+    
+    # Apply filling with appropriate grouping
+    if (!is.null(group_col)) {
+      out <- out %>%
+        dplyr::group_by(!!rlang::sym(group_col)) %>%
+        tidyr::fill(all_of(fill_cols), .direction = fill_direction) %>%
+        dplyr::ungroup()
+    } else {
+      out <- out %>%
+        tidyr::fill(all_of(fill_cols), .direction = fill_direction)
+    }
+  }
+  
+  # Clean up
+  out <- out %>%
+    dplyr::select(-"..row_id")
+  
+  # Remove original response column if requested
+  if (!keep_original) {
+    out <- out %>%
+      dplyr::select(-all_of(response_col))
+  }
+  
+  # Return result
+  out
 }
 
-
+#' Helper function to preview JSON structure
+#' 
+#' Examines the first few JSON responses to show their structure
+#' @param data Dataframe containing response data
+#' @param response_col Column name containing JSON responses
+#' @param n Number of responses to examine
+#' @export
+preview_responses <- function(data, response_col = "response", n = 5) {
+  json_rows <- grepl("^\\s*\\{.*}\\s*$", data[[response_col]])
+  responses <- data[[response_col]][json_rows][1:min(n, sum(json_rows))]
+  
+  lapply(responses, function(x) {
+    tryCatch({
+      str(jsonlite::fromJSON(x))
+    }, error = function(e) {
+      paste("Failed to parse:", e$message)
+    })
+  })
+}

@@ -96,8 +96,6 @@ loadexp <- function(exp,
   raw_data
 }
 
-#' Get user credentials either from config or user input
-#' @return List containing uid and pwd, or NULL if failed
 get_credentials <- function() {
   # Try to get existing config
   key <- try(config::get("qpsy"), silent = TRUE)
@@ -130,9 +128,6 @@ get_credentials <- function() {
   })
 }
 
-#' Safely read CSV files with error handling
-#' @param path Path to CSV file
-#' @return Data frame or NULL if read failed
 safely_read_csv <- function(path) {
   tryCatch({
     data.table::fread(path, showProgress = FALSE)
@@ -142,9 +137,6 @@ safely_read_csv <- function(path) {
   })
 }
 
-#' Clean JSON fields in the dataset
-#' @param df Data frame containing JSON fields
-#' @return Cleaned data frame
 clean_json_fields <- function(df) {
   json_cols <- c("response", "responses", "view_history")
   for (col in json_cols) {
@@ -155,10 +147,6 @@ clean_json_fields <- function(df) {
   df
 }
 
-#' Process local copy if available
-#' @param exp_escape Escaped experiment name
-#' @param new_files List of new files
-#' @return Data frame or NULL if local copy shouldn't be used
 process_local_copy <- function(exp_escape, new_files) {
   local_file <- paste0("raw_", exp_escape, ".rds")
   if (!file.exists(local_file)) return(NULL)
@@ -177,9 +165,6 @@ process_local_copy <- function(exp_escape, new_files) {
   NULL
 }
 
-#' Read and combine multiple CSV files
-#' @param links Vector of file URLs
-#' @return Combined data frame or NULL if all reads failed
 read_and_combine_files <- function(links) {
   #raw <- pbapply::pblapply(links, safely_read_csv, showProgress = FALSE)
   raw <- pbapply::pblapply(links, safely_read_csv)
@@ -194,11 +179,6 @@ read_and_combine_files <- function(links) {
   clean_json_fields(out)
 }
 
-#' Process JSON response data
-#' @param data Data frame containing response data
-#' @param response_col Name of response column
-#' @param fill_direction Direction to fill values
-#' @return Processed data frame
 process_responses <- function(data, 
                               response_col = "response",
                               fill_direction = "downup") {
@@ -219,14 +199,6 @@ process_responses <- function(data,
   })
 }
 
-#' Get files recursively from server
-#' @param page HTML page content
-#' @param exp Experiment name
-#' @param site Site identifier
-#' @param subdirs Whether to include subdirectories
-#' @param base_url Base URL for the server
-#' @param current_path Current path for recursive calls (internal use)
-#' @return Character vector of filenames
 get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_path = "") {
   # Get CSV files in current directory
   filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% 

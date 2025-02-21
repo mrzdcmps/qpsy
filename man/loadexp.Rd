@@ -2,23 +2,45 @@
 % Please edit documentation in R/qpsy.R
 \name{loadexp}
 \alias{loadexp}
-\title{Load Experimental Files from Server}
+\title{Load and process experimental files from server}
 \usage{
-loadexp(exp, subdirs = TRUE, splitresponse = TRUE)
+loadexp(
+  exp,
+  site = "q",
+  subdirs = TRUE,
+  splitresponse = TRUE,
+  localcopy = TRUE,
+  response_col = "response",
+  fill_direction = "downup"
+)
 }
 \arguments{
 \item{exp}{String. The name of the data folder of the experiment to be loaded.}
 
-\item{subdirs}{Logical. Should subdirectories be considered?}
+\item{site}{Either "q" for qpsy.de or "g" for ganzfeld.study.}
 
-\item{splitreponse}{Logical. Should survey responses be automatically written into separate columns?}
+\item{subdirs}{Logical. Should subdirectories be considered? Default: TRUE}
+
+\item{splitresponse}{Logical. Should survey responses be automatically written into separate columns? Default: TRUE}
+
+\item{localcopy}{Logical. Should a local copy be saved and used for future calls? Default: TRUE}
+
+\item{response_col}{Character. Name of the column containing JSON responses (default: "response")}
+
+\item{fill_direction}{Character. Direction to fill split responses: "downup" (default), "down", "up", or "none"}
 }
 \value{
-Dataframe containing all trials of the combined result files.
+Dataframe containing all trials of the combined result files
 }
 \description{
-Read all results files (.csv) from the server and write to dataframe
+Reads and combines CSV files from server, optionally processing JSON response data
 }
 \examples{
+# Basic usage
 myexp <- loadexp("myexp")
+
+# Custom response processing
+myexp <- loadexp("myexp", 
+                 splitresponse = TRUE,
+                 response_col = "responses")
 }

@@ -67,30 +67,95 @@ loadexp <- function(exp,
   
   # Process local copy if enabled
   exp_escape <- gsub("/", "-", exp)
+  local_result <- NULL
   if (localcopy) {
     local_result <- process_local_copy(exp_escape, filenames)
-    if (!is.null(local_result)) return(local_result)
+    
+    if (!is.null(local_result) && !local_result$download_all && is.null(local_result$new_files)) {
+      # No new files to download, just return the existing data
+      raw_data <- local_result$data
+      # Process responses if requested and there's data
+      if (nrow(raw_data) > 0 && splitresponse) {
+        if (response_col %in% colnames(raw_data)) {
+          raw_data <- process_responses(raw_data, 
+                                        response_col = response_col,
+                                        fill_direction = fill_direction)
+        } else {
+          message("Response column '", response_col, "' not found in data. Skipping response processing.")
+        }
+      }
+      return(raw_data)
+    }
+  } else {
+    # If localcopy is disabled, download all files
+    local_result <- list(download_all = TRUE)
   }
   
-  # Create and clean links
-  links <- paste0(url, filenames)
+  # Determine which files to download
+  if (local_result$download_all) {
+    # Download all files
+    files_to_download <- filenames
+    message("Reading files from server...")
+  } else {
+    # Download only new files
+    files_to_download <- local_result$new_files
+    message(sprintf("Reading %d new files from server...", length(files_to_download)))
+  }
+  
+  # Create links only for files that need to be downloaded
+  links <- paste0(url, files_to_download)
   links <- gsub(" ", "%20", links)
   
-  # Read and combine files
-  message("Reading files from server...")
-  raw_data <- read_and_combine_files(links)
-  if (is.null(raw_data)) return(data.frame())
+  # Associate filenames with links for tracking
+  names(links) <- files_to_download
   
-  # Process responses if requested
-  if (splitresponse && response_col %in% colnames(raw_data)) {
-    raw_data <- process_responses(raw_data, 
-                                  response_col = response_col,
-                                  fill_direction = fill_direction)
+  # Read new files
+  new_data <- NULL
+  if (length(links) > 0) {
+    new_data <- read_and_combine_files(links)
+    if (is.null(new_data)) new_data <- data.frame()
+  } else {
+    new_data <- data.frame()
+  }
+  
+  # Combine old and new data if needed
+  if (!local_result$download_all && !is.null(local_result$data) && nrow(new_data) > 0) {
+    # Ensure the columns match before binding
+    all_cols <- unique(c(colnames(local_result$data), colnames(new_data)))
+    for (col in all_cols) {
+      if (!col %in% colnames(local_result$data)) {
+        local_result$data[[col]] <- NA
+      }
+      if (!col %in% colnames(new_data)) {
+        new_data[[col]] <- NA
+      }
+    }
+    
+    raw_data <- data.table::rbindlist(list(local_result$data, new_data), fill = TRUE)
+    #message("Combined existing data with new files.")
+  } else if (nrow(new_data) > 0) {
+    raw_data <- new_data
+  } else if (!local_result$download_all && !is.null(local_result$data)) {
+    raw_data <- local_result$data
+  } else {
+    raw_data <- data.frame()
   }
   
   # Save local copy if enabled
-  if (localcopy) {
+  if (localcopy && nrow(raw_data) > 0) {
     saveRDS(raw_data, file = paste0("raw_", exp_escape, ".rds"))
+    #message("Local copy saved.")
+  }
+  
+  # Process responses if requested and there's data
+  if (nrow(raw_data) > 0 && splitresponse) {
+    if (response_col %in% colnames(raw_data)) {
+      raw_data <- process_responses(raw_data, 
+                                    response_col = response_col,
+                                    fill_direction = fill_direction)
+    } else {
+      message("Response column '", response_col, "' not found in data. Skipping response processing.")
+    }
   }
   
   raw_data
@@ -147,27 +212,61 @@ clean_json_fields <- function(df) {
   df
 }
 
-process_local_copy <- function(exp_escape, new_files) {
+process_local_copy <- function(exp_escape, new_filenames) {
   local_file <- paste0("raw_", exp_escape, ".rds")
-  if (!file.exists(local_file)) return(NULL)
+  if (!file.exists(local_file)) return(list(download_all = TRUE))
   
-  message("Local copy found.")
-  old_data <- readRDS(local_file)
-  old_files <- length(unique(old_data$file))
-  new_files_count <- length(unique(new_files))
+  #message("Local copy found.")
+  old_data <- tryCatch({
+    readRDS(local_file)
+  }, error = function(e) {
+    message("Error reading local copy: ", e$message)
+    return(NULL)
+  })
   
-  if (old_files == new_files_count) {
-    message("No new files found: Using local copy.")
-    return(old_data)
+  if (is.null(old_data)) {
+    message("Local copy is invalid. Re-downloading all files.")
+    return(list(download_all = TRUE))
   }
   
-  message("New files found: Updating local copy.")
-  NULL
+  # Check if filename column exists
+  if (!"filename" %in% colnames(old_data)) {
+    message("Local copy doesn't have filename tracking. Re-downloading all files.")
+    return(list(download_all = TRUE))
+  }
+  
+  # Get list of unique filenames from the existing data
+  old_filenames <- unique(old_data$filename)
+  
+  # Find which files are new
+  files_to_download <- setdiff(new_filenames, old_filenames)
+  
+  if (length(files_to_download) == 0) {
+    message("No new files found: Using local copy.")
+    return(list(download_all = FALSE, data = old_data, new_files = NULL))
+  }
+  
+  message(sprintf("Found %d new files: Updating local copy.", length(files_to_download)))
+  return(list(download_all = FALSE, data = old_data, new_files = files_to_download))
 }
 
 read_and_combine_files <- function(links) {
-  #raw <- pbapply::pblapply(links, safely_read_csv, showProgress = FALSE)
-  raw <- pbapply::pblapply(links, safely_read_csv)
+  # Create a function that reads a file and adds the filename
+  read_with_filename <- function(i) {
+    link <- links[i]
+    filename <- names(links)[i]
+    df <- safely_read_csv(link)
+    if (!is.null(df)) {
+      # Add the filename column
+      df$filename <- filename
+    }
+    return(df)
+  }
+  
+  # Use pbapply to show progress
+  raw <- pbapply::pblapply(seq_along(links), read_with_filename)
+  
+  # Filter out NULL results
   raw <- Filter(Negate(is.null), raw)
   
   if (length(raw) == 0) {
@@ -184,18 +283,31 @@ process_responses <- function(data,
                               fill_direction = "downup") {
   
   # Check if there are any JSON responses
-  if (!any(grepl("\\{\"", data[[response_col]]))) {
+  if (!response_col %in% colnames(data) || 
+      nrow(data) == 0 || 
+      !any(grepl("\\{\"", data[[response_col]], fixed = FALSE))) {
     return(data)
   }
   
-  message("Splitting responses to columns...")
+  #message("Splitting responses to columns...")
   tryCatch({
-    splitresponse(data, 
-                  response_col = response_col,
-                  fill_direction = fill_direction)
+    # Make sure tidyr and dplyr are loaded for the splitresponse function
+    if (!requireNamespace("tidyr", quietly = TRUE) || 
+        !requireNamespace("dplyr", quietly = TRUE) ||
+        !requireNamespace("rlang", quietly = TRUE)) {
+      message("Required packages (tidyr, dplyr, rlang) not available. Skipping response processing.")
+      return(data)
+    }
+    
+    # Call the splitresponse function
+    result <- splitresponse(data, 
+                            response_col = response_col,
+                            fill_direction = fill_direction)
+    return(result)
   }, error = function(e) {
     message("Failed to process responses: ", e$message)
-    data
+    # Return the original data if processing fails
+    return(data)
   })
 }
 

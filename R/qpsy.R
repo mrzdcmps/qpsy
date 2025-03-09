@@ -158,7 +158,7 @@ loadexp <- function(exp,
     }
   }
   
-  raw_data
+  raw_data %>% select(file, everything())
 }
 
 get_credentials <- function() {
@@ -229,14 +229,14 @@ process_local_copy <- function(exp_escape, new_filenames) {
     return(list(download_all = TRUE))
   }
   
-  # Check if filename column exists
-  if (!"filename" %in% colnames(old_data)) {
+  # Check if filename column exists or is old integer file system
+  if (!"file" %in% colnames(old_data) || is.integer(old_data$file)) {
     message("Local copy doesn't have filename tracking. Re-downloading all files.")
     return(list(download_all = TRUE))
   }
   
   # Get list of unique filenames from the existing data
-  old_filenames <- unique(old_data$filename)
+  old_filenames <- unique(old_data$file)
   
   # Find which files are new
   files_to_download <- setdiff(new_filenames, old_filenames)
@@ -258,7 +258,7 @@ read_and_combine_files <- function(links) {
     df <- safely_read_csv(link)
     if (!is.null(df)) {
       # Add the filename column
-      df$filename <- filename
+      df$file <- filename
     }
     return(df)
   }
@@ -274,7 +274,7 @@ read_and_combine_files <- function(links) {
     return(NULL)
   }
   
-  out <- data.table::rbindlist(raw, id = "file", fill = TRUE)
+  out <- data.table::rbindlist(raw, fill = TRUE)
   clean_json_fields(out)
 }
 

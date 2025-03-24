@@ -140,6 +140,9 @@ loadexp <- function(exp,
   } else {
     raw_data <- data.frame()
   }
+
+  # "file" should be first column
+  raw_data <- raw_data %>% select(file, everything())
   
   # Save local copy if enabled
   if (localcopy && nrow(raw_data) > 0) {
@@ -158,7 +161,7 @@ loadexp <- function(exp,
     }
   }
   
-  raw_data %>% select(file, everything())
+  raw_data
 }
 
 get_credentials <- function() {

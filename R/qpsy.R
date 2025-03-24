@@ -84,7 +84,7 @@ loadexp <- function(exp,
           message("Response column '", response_col, "' not found in data. Skipping response processing.")
         }
       }
-      return(raw_data)
+      return(raw_data %>% select(file, everything()))
     }
   } else {
     # If localcopy is disabled, download all files

@@ -74,17 +74,21 @@ loadexp <- function(exp,
     if (!is.null(local_result) && !local_result$download_all && is.null(local_result$new_files)) {
       # No new files to download, just return the existing data
       raw_data <- local_result$data
+      # Make sure "file" is the first column
+      raw_data <- raw_data %>% select(file, everything())
       # Process responses if requested and there's data
       if (nrow(raw_data) > 0 && splitresponse) {
         if (response_col %in% colnames(raw_data)) {
           raw_data <- process_responses(raw_data, 
                                         response_col = response_col,
                                         fill_direction = fill_direction)
+          # Ensure "file" is first column after processing responses
+          raw_data <- raw_data %>% select(file, everything())
         } else {
           message("Response column '", response_col, "' not found in data. Skipping response processing.")
         }
       }
-      return(raw_data %>% select(file, everything()))
+      return(raw_data)
     }
   } else {
     # If localcopy is disabled, download all files
@@ -156,6 +160,8 @@ loadexp <- function(exp,
       raw_data <- process_responses(raw_data, 
                                     response_col = response_col,
                                     fill_direction = fill_direction)
+      # Ensure "file" is first column after processing responses
+      raw_data <- raw_data %>% select(file, everything())
     } else {
       message("Response column '", response_col, "' not found in data. Skipping response processing.")
     }

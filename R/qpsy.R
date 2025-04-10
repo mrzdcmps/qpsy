@@ -238,14 +238,31 @@ process_local_copy <- function(exp_escape, new_filenames) {
   # Get list of unique filenames from the existing data
   old_filenames <- unique(old_data$file)
   
-  # Find which files are new
+  # Find which files are new and which have been removed
   files_to_download <- setdiff(new_filenames, old_filenames)
+  files_to_remove <- setdiff(old_filenames, new_filenames)
   
-  if (length(files_to_download) == 0) {
-    message("No new files found: Using local copy.")
+  # If we have files to remove, we need to update the local data
+  if (length(files_to_remove) > 0) {
+    message(sprintf("Found %d files that have been removed from server. Updating local copy.", 
+                    length(files_to_remove)))
+    # Filter out the rows with filenames that need to be removed
+    old_data <- old_data[!old_data$file %in% files_to_remove, ]
+  }
+  
+  # Case 1: No changes at all
+  if (length(files_to_download) == 0 && length(files_to_remove) == 0) {
+    message("No changes detected: Using local copy.")
     return(list(download_all = FALSE, data = old_data, new_files = NULL))
   }
   
+  # Case 2: Only files to remove, no new files to download
+  if (length(files_to_download) == 0 && length(files_to_remove) > 0) {
+    message("Files have been removed. Using updated local copy.")
+    return(list(download_all = FALSE, data = old_data, new_files = NULL))
+  }
+  
+  # Case 3: New files to download (with or without removals)
   message(sprintf("Found %d new files: Updating local copy.", length(files_to_download)))
   return(list(download_all = FALSE, data = old_data, new_files = files_to_download))
 }

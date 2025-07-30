@@ -446,7 +446,6 @@ splitresponse <- function(data,
   }
   
   # Parse JSON responses
-  #message("Parsing JSON responses...")
   parsed_responses <- lapply(data[[response_col]][json_rows], safe_parse_json)
   
   # Remove NULL entries (failed parses)
@@ -459,12 +458,58 @@ splitresponse <- function(data,
   parsed_responses <- parsed_responses[valid_responses]
   response_rows <- which(json_rows)[valid_responses]
   
+  # Function to flatten nested structures
+  flatten_response <- function(resp, prefix = "") {
+    if (is.null(resp)) return(list())
+    
+    result <- list()
+    
+    if (is.list(resp) && !is.data.frame(resp)) {
+      for (name in names(resp)) {
+        current_prefix <- if (prefix == "") name else paste0(prefix, "_", name)
+        
+        if (is.list(resp[[name]]) && !is.data.frame(resp[[name]])) {
+          # Recursively flatten nested lists
+          nested <- flatten_response(resp[[name]], current_prefix)
+          result <- c(result, nested)
+        } else {
+          # Add the value directly
+          result[[current_prefix]] <- resp[[name]]
+        }
+      }
+    } else {
+      # If it's not a list or is a data frame, return as is
+      result[[if (prefix == "") "value" else prefix]] <- resp
+    }
+    
+    return(result)
+  }
+  
   # Convert list of responses to data frame
-  #message("Converting responses to columns...")
   response_df <- tryCatch({
-    response_df <- dplyr::bind_rows(parsed_responses)
-    response_df$..row_id <- response_rows
-    response_df
+    # Flatten all responses first
+    flattened_responses <- lapply(parsed_responses, flatten_response)
+    
+    # Convert each flattened response to a single-row data frame
+    response_dfs <- lapply(seq_along(flattened_responses), function(i) {
+      flat_resp <- flattened_responses[[i]]
+      if (length(flat_resp) == 0) return(NULL)
+      
+      # Convert to data frame
+      df <- as.data.frame(flat_resp, stringsAsFactors = FALSE)
+      df$..row_id <- response_rows[i]
+      return(df)
+    })
+    
+    # Remove NULL entries
+    response_dfs <- response_dfs[!sapply(response_dfs, is.null)]
+    
+    if (length(response_dfs) == 0) {
+      stop("No valid responses to process")
+    }
+    
+    # Bind all rows together
+    dplyr::bind_rows(response_dfs)
   }, error = function(e) {
     stop("Failed to convert responses to columns: ", e$message)
   })
@@ -474,13 +519,11 @@ splitresponse <- function(data,
   
   # Fill missing values if requested
   if (fill_direction != "none" && nrow(response_df) > 0) {
-    #message("Filling missing values...")
     
     fill_cols <- setdiff(colnames(response_df), "..row_id")
     
     # Determine grouping column
     group_col <- if ("file" %in% colnames(out)) {
-      #message("Grouping by file")
       "file"
     } else if ("subject" %in% colnames(out)) {
       message("File column not found, grouping by subject")

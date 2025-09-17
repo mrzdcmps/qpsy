@@ -99,7 +99,7 @@ loadexp <- function(exp,
   if (local_result$download_all) {
     # Download all files
     files_to_download <- filenames
-    message("Reading files from server...")
+    message("Reading all files from server...")
   } else {
     # Download only new files
     files_to_download <- local_result$new_files
@@ -188,13 +188,16 @@ get_credentials <- function() {
     pw <- readline("Please enter the password: ")
   }
   
-  # Try to download config
+  # Download config with proper authentication
   tryCatch({
-    download.file(
-      paste0("https://", user, ":", pw, "@qpsy.de/data/config.yml"), 
-      "config.yml",
-      quiet = TRUE
-    )
+    cred_string <- paste0(user, ":", pw)
+    
+    download.file("https://qpsy.de/data/config.yml", "config.yml",
+                  method = "libcurl", 
+                  headers = c("Authorization" = paste("Basic", 
+                                                      base64enc::base64encode(charToRaw(cred_string)))),
+                  quiet = TRUE)
+    
     config::get("qpsy")
   }, error = function(e) {
     message("Failed to authenticate. Please check your credentials.")
@@ -204,10 +207,39 @@ get_credentials <- function() {
 
 safely_read_csv <- function(path) {
   tryCatch({
-    data.table::fread(path, showProgress = FALSE)
+    suppressWarnings(data.table::fread(path, showProgress = FALSE))
   }, error = function(e) {
-    message(sprintf("Failed to read file: %s", path))
-    NULL
+    # If direct fread fails and it's a URL, try download with proper auth
+    if (grepl("^https?://", path)) {
+      tryCatch({
+        temp_file <- tempfile(fileext = ".csv")
+        on.exit(unlink(temp_file))
+        
+        # Extract credentials and create proper headers
+        if (grepl("://[^/]*:.*@", path)) {
+          # Parse credentials from URL
+          cred_match <- regmatches(path, regexpr("://\\K[^/]*:.*?(?=@)", path, perl = TRUE))
+          clean_url <- gsub("://[^/]*:.*?@", "://", path)
+          
+          download.file(clean_url, temp_file, 
+                        method = "libcurl", 
+                        headers=c("Authorization"=paste("Basic", 
+                                                        base64enc::base64encode(charToRaw(cred_match)))),
+                        quiet = TRUE)
+        } else {
+          # No credentials, just use libcurl
+          download.file(path, temp_file, method = "libcurl", quiet = TRUE)
+        }
+        
+        data.table::fread(temp_file, showProgress = FALSE)
+      }, error = function(e2) {
+        message(sprintf("Failed to read file: %s", path))
+        NULL
+      })
+    } else {
+      message(sprintf("Failed to read file: %s", path))
+      NULL
+    }
   })
 }
 

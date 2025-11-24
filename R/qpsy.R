@@ -21,6 +21,9 @@
 #' myexp <- loadexp("myexp", 
 #'                  splitresponse = TRUE,
 #'                  response_col = "responses")
+#'
+#' @importFrom magrittr %>%
+#' @importFrom dplyr select everything              
 #' @export
 loadexp <- function(exp, 
                     site = "q", 
@@ -41,7 +44,7 @@ loadexp <- function(exp,
   # Get credentials
   credentials <- get_credentials()
   if (is.null(credentials)) {
-    return(NULL)  # Error message already shown by get_credentials()
+    return(NULL)
   }
   
   # Construct base URL
@@ -75,7 +78,7 @@ loadexp <- function(exp,
       # No new files to download, just return the existing data
       raw_data <- local_result$data
       # Make sure "file" is the first column
-      raw_data <- raw_data %>% select(file, everything())
+      raw_data <- raw_data %>% dplyr::select(file, everything())
       # Process responses if requested and there's data
       if (nrow(raw_data) > 0 && splitresponse) {
         if (response_col %in% colnames(raw_data)) {
@@ -83,7 +86,7 @@ loadexp <- function(exp,
                                         response_col = response_col,
                                         fill_direction = fill_direction)
           # Ensure "file" is first column after processing responses
-          raw_data <- raw_data %>% select(file, everything())
+          raw_data <- raw_data %>% dplyr::select(file, everything())
         } else {
           message("Response column '", response_col, "' not found in data. Skipping response processing.")
         }
@@ -146,7 +149,7 @@ loadexp <- function(exp,
   }
 
   # "file" should be first column
-  raw_data <- raw_data %>% select(file, everything())
+  raw_data <- raw_data %>% dplyr::select(file, everything())
   
   # Save local copy if enabled
   if (localcopy && nrow(raw_data) > 0) {
@@ -161,7 +164,7 @@ loadexp <- function(exp,
                                     response_col = response_col,
                                     fill_direction = fill_direction)
       # Ensure "file" is first column after processing responses
-      raw_data <- raw_data %>% select(file, everything())
+      raw_data <- raw_data %>% dplyr::select(file, everything())
     } else {
       message("Response column '", response_col, "' not found in data. Skipping response processing.")
     }
@@ -369,6 +372,8 @@ process_responses <- function(data,
   })
 }
 
+#' @importFrom rvest html_elements html_text
+#' @importFrom magrittr %>%
 get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_path = "") {
   # Get CSV files in current directory
   filenames <- rvest::html_elements(page, xpath = ".//a[contains(@href, '.csv')]") %>% 
@@ -436,6 +441,11 @@ get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_
 #'                        response_col = "responses",
 #'                        fill_direction = "down",
 #'                        keep_original = FALSE)
+#'                        
+#' @importFrom magrittr %>%
+#' @importFrom dplyr bind_rows left_join group_by ungroup select
+#' @importFrom tidyr fill all_of
+#' @importFrom rlang sym !!
 #' @export
 splitresponse <- function(data, 
                           response_col = "response",

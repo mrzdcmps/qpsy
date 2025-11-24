@@ -1,18 +1,20 @@
 Package: qpsy
 Type: Package
 Title: Functions to use for online experiments with jsPsych on qpsy.de
-Version: 1.1.0
+Version: 1.1.1
 Authors@R: person("Moritz", "Dechamps", email = "moritz.dechamps@psy.lmu.de",
   role = c("aut", "cre"))
 Description: Use these functions for your data analysis with experiments stored on qpsy.de
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Imports:
-	data.table (>= 1.9.4),
-	dplyr,
-	tidyr,
-	rvest,
-	jsonlite,
-	pbapply,
-	config
+        data.table (>= 1.9.4),
+        dplyr,
+        tidyr,
+        rvest,
+        jsonlite,
+        pbapply,
+        config,
+        magrittr,
+        rlang

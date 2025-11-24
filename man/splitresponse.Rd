@@ -40,4 +40,5 @@ survey <- splitresponse(myexp,
                        response_col = "responses",
                        fill_direction = "down",
                        keep_original = FALSE)
+                       
 }

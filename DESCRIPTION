@@ -17,4 +17,5 @@ Imports:
         pbapply,
         config,
         magrittr,
-        rlang
+        rlang,
+        httr

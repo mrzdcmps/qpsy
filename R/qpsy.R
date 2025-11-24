@@ -47,15 +47,41 @@ loadexp <- function(exp,
     return(NULL)
   }
   
+  # URL encode credentials
+  uid_encoded <- utils::URLencode(credentials$uid, reserved = TRUE)
+  pwd_encoded <- utils::URLencode(credentials$pwd, reserved = TRUE)
+  
   # Construct base URL
-  base_url <- paste0("https://", credentials$uid, ":", credentials$pwd, "@", domain, "/data/")
+  base_url <- paste0("https://", uid_encoded, ":", pwd_encoded, "@", domain, "/data/")
   url <- paste0(base_url, exp, "/")
+  
+  # Check if experiment exists by testing HTTP status
+  status_check <- tryCatch({
+    httr::HEAD(url)
+  }, error = function(e) {
+    NULL
+  })
+  
+  if (is.null(status_check)) {
+    message("Could not connect to server. Please check your internet connection.")
+    return(NULL)
+  }
+  
+  if (httr::status_code(status_check) == 404) {
+    message("Cannot find experiment '", exp, "'. Please check the experiment name.")
+    return(NULL)
+  }
+  
+  if (httr::status_code(status_check) != 200) {
+    message("Server error (HTTP ", httr::status_code(status_check), "). Please try again later.")
+    return(NULL)
+  }
   
   # Try to read the page
   page <- tryCatch({
     rvest::read_html(url)
   }, error = function(e) {
-    message("Could not connect to server. Please check your internet connection and credentials.")
+    message("Could not read experiment page: ", e$message)
     return(NULL)
   })
   
@@ -556,13 +582,19 @@ splitresponse <- function(data,
     stop("Failed to convert responses to columns: ", e$message)
   })
   
+  # Store original column names from response_df (excluding row_id)
+  response_cols_original <- setdiff(colnames(response_df), "..row_id")
+  
   # Join with original data
-  out <- dplyr::left_join(data, response_df, by = "..row_id")
+  out <- dplyr::left_join(data, response_df, by = "..row_id", suffix = c("", ".response"))
+  
+  # Identify which columns were actually added from response_df
+  # (may have .response suffix if there were conflicts)
+  all_new_cols <- setdiff(colnames(out), colnames(data))
+  fill_cols <- all_new_cols
   
   # Fill missing values if requested
-  if (fill_direction != "none" && nrow(response_df) > 0) {
-    
-    fill_cols <- setdiff(colnames(response_df), "..row_id")
+  if (fill_direction != "none" && length(fill_cols) > 0) {
     
     # Determine grouping column
     group_col <- if ("file" %in% colnames(out)) {
@@ -579,11 +611,11 @@ splitresponse <- function(data,
     if (!is.null(group_col)) {
       out <- out %>%
         dplyr::group_by(!!rlang::sym(group_col)) %>%
-        tidyr::fill(all_of(fill_cols), .direction = fill_direction) %>%
+        tidyr::fill(dplyr::all_of(fill_cols), .direction = fill_direction) %>%
         dplyr::ungroup()
     } else {
       out <- out %>%
-        tidyr::fill(all_of(fill_cols), .direction = fill_direction)
+        tidyr::fill(dplyr::all_of(fill_cols), .direction = fill_direction)
     }
   }
   
@@ -594,7 +626,7 @@ splitresponse <- function(data,
   # Remove original response column if requested
   if (!keep_original) {
     out <- out %>%
-      dplyr::select(-all_of(response_col))
+      dplyr::select(-dplyr::all_of(response_col))
   }
   
   # Return result

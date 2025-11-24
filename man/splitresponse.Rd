@@ -9,7 +9,8 @@ splitresponse(
   response_col = "response",
   fill_direction = "downup",
   keep_original = TRUE,
-  simplify = TRUE
+  simplify = TRUE,
+  array_sep = ", "
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ splitresponse(
 \item{keep_original}{Logical. Whether to keep the original response column (default: TRUE)}
 
 \item{simplify}{Logical. Whether to simplify single-element arrays to vectors (default: TRUE)}
+
+\item{array_sep}{Character. Separator for multi-value arrays (default: ", "). Use NULL to keep as list columns.}
 }
 \value{
 Dataframe with JSON responses split into separate columns

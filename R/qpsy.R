@@ -457,6 +457,7 @@ get_files <- function(page, exp, site, subdirs = TRUE, base_url = NULL, current_
 #' @param fill_direction Character. Direction to fill missing values: "downup" (default), "down", "up", or "none"
 #' @param keep_original Logical. Whether to keep the original response column (default: TRUE)
 #' @param simplify Logical. Whether to simplify single-element arrays to vectors (default: TRUE)
+#' @param array_sep Character. Separator for multi-value arrays (default: ", "). Use NULL to keep as list columns.
 #' @return Dataframe with JSON responses split into separate columns
 #' @examples
 #' # Basic usage
@@ -477,7 +478,8 @@ splitresponse <- function(data,
                           response_col = "response",
                           fill_direction = "downup",
                           keep_original = TRUE,
-                          simplify = TRUE) {
+                          simplify = TRUE,
+                          array_sep = ", ") {
   
   # Input validation
   if (!is.data.frame(data)) {
@@ -562,6 +564,20 @@ splitresponse <- function(data,
     response_dfs <- lapply(seq_along(flattened_responses), function(i) {
       flat_resp <- flattened_responses[[i]]
       if (length(flat_resp) == 0) return(NULL)
+      
+      # Handle arrays: convert to strings or wrap in lists
+      for (name in names(flat_resp)) {
+        val <- flat_resp[[name]]
+        if (length(val) > 1) {
+          if (!is.null(array_sep)) {
+            # Convert array to comma-separated string
+            flat_resp[[name]] <- paste(val, collapse = array_sep)
+          } else {
+            # Keep as list column
+            flat_resp[[name]] <- list(val)
+          }
+        }
+      }
       
       # Convert to data frame
       df <- as.data.frame(flat_resp, stringsAsFactors = FALSE)

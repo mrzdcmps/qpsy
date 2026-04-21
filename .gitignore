@@ -5,3 +5,4 @@
 .Rbuildignore
 qpsy.Rproj
 config.yml
+.claude/

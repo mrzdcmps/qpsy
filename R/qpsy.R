@@ -497,6 +497,23 @@ splitresponse <- function(data,
   # Add row identifier for proper joining later
   data$..row_id <- seq_len(nrow(data))
   
+  # Fix corrupt POSIXct columns: data.table::fread/rbindlist can produce columns
+  # with class "POSIXct" but typeof "character" (date strings instead of numeric).
+  # vctrs (used by tidyr::fill) rejects these, so convert them to proper POSIXct.
+  # Note: must use unclass() first — as.POSIXct() dispatches to as.POSIXct.POSIXct
+  # when the input already has class "POSIXct", returning the corrupt object unchanged.
+  # Also pre-filter non-date strings (e.g. "null") to NA to avoid parse errors.
+  for (col in names(data)) {
+    if (inherits(data[[col]], "POSIXct") && typeof(data[[col]]) == "character") {
+      tz <- attr(data[[col]], "tzone")
+      if (is.null(tz) || tz == "") tz <- "UTC"
+      raw_chars <- unclass(data[[col]])
+      attr(raw_chars, "tzone") <- NULL
+      raw_chars[!grepl("^\\d{4}-\\d{2}-\\d{2}", raw_chars, perl = TRUE)] <- NA_character_
+      data[[col]] <- as.POSIXct(raw_chars, tz = tz, format = "%Y-%m-%d %H:%M:%OS")
+    }
+  }
+  
   # Find rows containing JSON responses
   json_rows <- grepl("^\\s*\\{.*}\\s*$", data[[response_col]])
   if (!any(json_rows)) {
